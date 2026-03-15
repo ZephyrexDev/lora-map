@@ -40,6 +40,7 @@ compose.yml         → Optional podman-compose for dev convenience
 - **Data/Geo:** Rasterio, GDAL, NumPy, Matplotlib, Haversine, Boto3 (AWS S3 terrain tiles)
 - **Infra:** Podman (single container), sits behind an external HTTPS-terminating reverse proxy
 - **Testing:** Vitest (frontend), pytest (backend), GitHub Actions CI
+- **Linting/Formatting:** Black + Ruff (Python), ESLint + Prettier (TypeScript/Vue)
 - **Package manager:** pnpm (frontend), uv (backend)
 
 ## Commands
@@ -58,6 +59,12 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8080
 pnpm run test             # Frontend tests (Vitest)
 uv run pytest -v          # Backend tests (pytest)
 
+# Linting & Formatting
+uv run black app/ tests/  # Format Python (line length 88)
+uv run ruff check app/ tests/  # Lint Python
+pnpm run lint             # ESLint + Prettier (TypeScript/Vue)
+pnpm run format           # Prettier format only
+
 # Container
 podman build -f Containerfile -t lora-planner .
 podman run -p 8080:8080 -v lora-data:/data lora-planner
@@ -70,8 +77,10 @@ podman-compose up         # Dev convenience (optional)
 
 - Target Python 3.11. Use modern syntax: `match`, `|` union types, f-strings.
 - Use type hints on all function signatures. Use Pydantic models for API boundaries.
-- Follow PEP 8. Use snake_case for functions, variables, and modules. Use PascalCase for classes.
-- Keep functions short and single-purpose. Extract helpers only when reuse is concrete, not hypothetical.
+- Follow PEP 8 strictly. All code must be formatted with **Black** (line length 88). Lint with **Ruff** (`ruff check`).
+- Use snake_case for functions, variables, and modules. Use PascalCase for classes.
+- **Favor object-oriented design.** Group related state and behavior into classes. Use inheritance and composition to share logic — prefer composition when the relationship is "has-a", inheritance when "is-a". Avoid loose collections of module-level functions when a class would reduce parameter passing and improve cohesion.
+- **Minimize code volume.** Consolidate duplicate logic into shared base classes, mixins, or utility methods. If two pieces of code do similar things, refactor them behind a common abstraction. Shorter is better when clarity is preserved.
 - Avoid mutable default arguments. Prefer `None` with internal initialization.
 - Use `logging` (module-level `logger = logging.getLogger(__name__)`) — never `print()` in backend code.
 - Handle exceptions at the appropriate level. Don't catch broad `Exception` unless re-raising or storing the error (as in the task runner pattern).
@@ -80,7 +89,11 @@ podman-compose up         # Dev convenience (optional)
 ### TypeScript / Vue
 
 - Use TypeScript strict mode. All exports must be typed — no `any` except where third-party types are missing (e.g., georaster).
+- Lint with **ESLint** (`eslint .`) using `@typescript-eslint` and `eslint-plugin-vue`. Format with **Prettier**.
+- Follow modern TypeScript idioms: discriminated unions over type assertions, `satisfies` for safe narrowing, `readonly` where mutation isn't needed, `as const` for literal types.
 - Define shared interfaces in `src/types.ts`. Keep the single source of truth for data shapes.
+- **Favor object-oriented design and class-based abstractions.** Use classes for stateful services, models, and anything with lifecycle. Use interfaces and generics to define contracts. Prefer composition via injected dependencies over standalone functions with implicit coupling.
+- **Minimize code volume.** Extract shared logic into base classes, generic utilities, or composables. Consolidate repeated patterns — two near-identical blocks should become one parameterized abstraction.
 - Use Vue 3 Composition API for new components. Existing Options API code does not need to be rewritten unless being significantly modified.
 - Use Pinia for shared state. Components should not hold state that other components need.
 - Prefer `const` over `let`. Never use `var`.
@@ -88,7 +101,7 @@ podman-compose up         # Dev convenience (optional)
 
 ### General
 
-- **DRY:** Extract repeated logic into shared utilities only when the pattern appears 3+ times. Two similar blocks are fine — premature abstraction is worse than duplication.
+- **DRY aggressively.** Extract repeated logic into shared abstractions as soon as a pattern appears twice. Prefer a single parameterized implementation over two similar blocks. Actively look for opportunities to reduce total lines of code through consolidation.
 - **No dead code.** Remove commented-out imports, unused variables, and stale comments. Don't leave `// TODO` markers without a linked issue.
 - **Naming:** Names should describe *what* something is or does, not *how*. Prefer `terrain_tile_cache` over `dc` or `cache1`.
 - **No secrets in code.** AWS credentials, API keys, and admin credentials must come from environment variables — never hardcoded.
