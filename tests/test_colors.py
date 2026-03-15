@@ -37,6 +37,14 @@ class TestNextTowerColor:
         result = next_tower_color(existing)
         assert result == PALETTE[3]
 
+    def test_skips_single_used_color(self):
+        result = next_tower_color([PALETTE[0]])
+        assert result == PALETTE[1]
+
     def test_cycles_when_all_used(self):
         result = next_tower_color(list(PALETTE))
         assert result == PALETTE[0]
+
+    def test_case_insensitive_matching(self):
+        result = next_tower_color([PALETTE[0].upper()])
+        assert result == PALETTE[1]
