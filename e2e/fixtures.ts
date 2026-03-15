@@ -2,7 +2,10 @@
  * Shared Playwright fixtures for E2E tests.
  *
  * Provides helpers to interact with the backend API directly (bypassing the
- * frontend) for test setup: seeding towers, authenticating, and resetting state.
+ * frontend) for test setup: authenticating and seeding data.
+ *
+ * The DB is wiped at the start of each Playwright run (rm in webServer command),
+ * so tests share a single clean database within a run.
  */
 
 import { test as base, expect, type APIRequestContext } from '@playwright/test'
@@ -20,17 +23,6 @@ async function getAdminToken(request: APIRequestContext): Promise<string> {
   return body.token as string
 }
 
-/** Wipe all towers (and cascaded tasks/paths) so each test starts clean. */
-async function clearAllTowers(request: APIRequestContext, token: string): Promise<void> {
-  const response = await request.get(`${BACKEND_URL}/towers`)
-  const { towers } = await response.json()
-  for (const tower of towers) {
-    await request.delete(`${BACKEND_URL}/towers/${tower.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-  }
-}
-
 /** Extended test fixture that exposes admin helpers. */
 export const test = base.extend<{
   adminToken: string
@@ -39,7 +31,6 @@ export const test = base.extend<{
 }>({
   adminToken: async ({ request }, use) => {
     const token = await getAdminToken(request)
-    await clearAllTowers(request, token)
     await use(token)
   },
   backendUrl: BACKEND_URL,

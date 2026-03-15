@@ -1,7 +1,11 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
 
 const BACKEND_PORT = 8080
 const FRONTEND_PORT = 5173
+const PROJECT_DIR = path.dirname(fileURLToPath(import.meta.url))
+const SPLAT_PATH = path.join(PROJECT_DIR, 'splat', 'bin')
 
 export default defineConfig({
   testDir: './e2e',
@@ -22,7 +26,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `ADMIN_PASSWORD=e2e-test-password DB_PATH=/tmp/e2e-test.db uv run uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT}`,
+      command: `rm -f /tmp/e2e-test.db && ADMIN_PASSWORD=e2e-test-password DB_PATH=/tmp/e2e-test.db SPLAT_PATH=${SPLAT_PATH} uv run uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT}`,
       port: BACKEND_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

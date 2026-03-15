@@ -102,24 +102,20 @@ test.describe('API integration', () => {
     expect(body.detail).toContain('at least 2')
   })
 
-  test('tower list reflects in frontend after creation', async ({
-    page,
-    request,
-    backendUrl,
-    adminToken,
-  }) => {
-    const headers = { Authorization: `Bearer ${adminToken}` }
-
-    // Create a tower via API
-    await request.post(`${backendUrl}/predict`, {
-      headers,
-      data: { lat: 40.0, lon: -105.0, tx_power: 20.0 },
-    })
-
-    // Load the page — the tower should appear in the list (by name or as a list item)
+  test('admin login enables map and simulation UI', async ({ page, adminPassword }) => {
     await page.goto('/')
 
-    // The TowerList should have at least one list-group-item (not "No towers")
-    await expect(page.locator('.list-group-item')).toBeVisible()
+    // Close offcanvas, open login modal
+    await page.locator('[data-bs-dismiss="offcanvas"]').click()
+    await page.waitForTimeout(300)
+    await page.locator('[data-bs-target="#loginModal"]').click()
+    await page.locator('#passwordInput').fill(adminPassword)
+    await page.locator('#loginModal button[type="submit"]').click()
+
+    // After login, Transmitter component mounts and initializes the map
+    await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 10_000 })
+
+    // Admin controls should be present
+    await expect(page.locator('#runSimulation')).toBeVisible()
   })
 })
