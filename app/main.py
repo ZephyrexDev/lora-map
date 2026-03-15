@@ -142,19 +142,34 @@ def _delete_row(model: type, row_id: str, label: str) -> DeleteResponse:
     return DeleteResponse(message=f"{label} deleted", id=row_id)
 
 
+_SIMULATION_MAX_RETRIES = 2
+_SIMULATION_RETRY_DELAY_SECONDS = 5
+
+
 def _run_simulation_task(
     run_fn: Callable[[], bytes],
     on_success: Callable[[bytes], None],
     on_failure: Callable[[str], None],
     label: str,
 ) -> None:
-    """Execute a simulation function with standardized success/failure DB updates."""
-    try:
-        result = run_fn()
-        on_success(result)
-    except Exception as e:
-        logger.error("%s failed: %s", label, e)
-        on_failure(str(e))
+    """Execute a simulation function with retry and standardized success/failure DB updates."""
+    import time
+
+    last_error: Exception | None = None
+    for attempt in range(1, _SIMULATION_MAX_RETRIES + 1):
+        try:
+            result = run_fn()
+            on_success(result)
+            return
+        except Exception as e:
+            last_error = e
+            if attempt < _SIMULATION_MAX_RETRIES:
+                logger.warning("%s attempt %d/%d failed: %s — retrying", label, attempt, _SIMULATION_MAX_RETRIES, e)
+                time.sleep(_SIMULATION_RETRY_DELAY_SECONDS)
+            else:
+                logger.error("%s failed after %d attempts: %s", label, _SIMULATION_MAX_RETRIES, e)
+
+    on_failure(str(last_error))
 
 
 def _get_tower_location(session: Session, tower_id: str) -> TowerLocation | None:
