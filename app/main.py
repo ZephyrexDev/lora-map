@@ -40,6 +40,8 @@ from app.matrix import (
     set_matrix_config,
 )
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
+from app.models.DeadzoneResponse import DeadzoneAnalysisResponse
+from app.services.deadzone import DeadzoneAnalyzer
 from app.services.splat import Splat
 
 logging.basicConfig(level=logging.INFO)
@@ -194,10 +196,35 @@ async def predict(
                 (sim_id, tower_id, combo["hardware"], combo["antenna"], combo["terrain"]),
             )
 
+        # Gather existing tower IDs for auto-path computation
+        existing_tower_ids: list[str] = [
+            r["id"] for r in conn.execute("SELECT id FROM towers WHERE id != ?", (tower_id,)).fetchall()
+        ]
+
+        # Create path rows for pairwise analysis with existing towers
+        for other_id in existing_tower_ids:
+            path_id = str(uuid4())
+            conn.execute(
+                "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES (?, ?, ?)",
+                (path_id, tower_id, other_id),
+            )
+
         conn.commit()
 
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
     background_tasks.add_task(run_matrix_simulations, tower_id, payload)
+
+    # Queue path analysis for the new tower against all existing towers
+    with db_connection() as conn:
+        new_paths = conn.execute(
+            "SELECT id, tower_a_id, tower_b_id FROM tower_paths WHERE tower_a_id = ? OR tower_b_id = ?",
+            (tower_id, tower_id),
+        ).fetchall()
+    for path_row in new_paths:
+        background_tasks.add_task(
+            run_tower_path_analysis, path_row["tower_a_id"], path_row["tower_b_id"], path_row["id"]
+        )
+
     return JSONResponse({"task_id": task_id, "tower_id": tower_id})
 
 
@@ -348,7 +375,8 @@ async def list_tower_simulations(
             enabled_ant = set(config.get("antennas", []))
             enabled_ter = set(config.get("terrain", []))
             rows = [
-                r for r in rows
+                r
+                for r in rows
                 if r["client_hardware"] in enabled_hw
                 and r["client_antenna"] in enabled_ant
                 and r["terrain_model"] in enabled_ter
@@ -465,6 +493,199 @@ async def put_matrix_config_endpoint(
         set_matrix_config(conn, config)
 
     return JSONResponse(config)
+
+
+# ---------------------------------------------------------------------------
+# Tower path endpoints
+# ---------------------------------------------------------------------------
+
+
+def _get_tower_location(conn, tower_id: str) -> dict[str, Any] | None:
+    """Return lat, lon, and tx_height for a tower, or None if not found."""
+    row = conn.execute("SELECT params FROM towers WHERE id = ?", (tower_id,)).fetchone()
+    if row is None:
+        return None
+    params = json.loads(row["params"])
+    return {
+        "lat": params.get("lat", 0),
+        "lon": params.get("lon", 0),
+        "tx_height": params.get("tx_height", 1),
+        "frequency_mhz": params.get("frequency_mhz", 905.0),
+    }
+
+
+def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> None:
+    """Run SPLAT! P2P analysis between two towers and store the result."""
+    try:
+        with db_connection() as conn:
+            loc_a = _get_tower_location(conn, tower_a_id)
+            loc_b = _get_tower_location(conn, tower_b_id)
+
+        if loc_a is None or loc_b is None:
+            logger.warning("Tower not found for path %s, skipping.", path_id)
+            return
+
+        result = splat_service.point_to_point(
+            lat_a=loc_a["lat"],
+            lon_a=loc_a["lon"],
+            height_a=loc_a["tx_height"],
+            lat_b=loc_b["lat"],
+            lon_b=loc_b["lon"],
+            height_b=loc_b["tx_height"],
+            frequency_mhz=loc_a["frequency_mhz"],
+        )
+
+        with db_connection() as conn:
+            conn.execute(
+                "UPDATE tower_paths SET path_loss_db = ?, has_los = ?, distance_km = ? WHERE id = ?",
+                (result.path_loss_db, int(result.has_los), result.distance_km, path_id),
+            )
+            conn.commit()
+            logger.info(
+                "Tower path %s completed: loss=%.1f dB, LOS=%s, dist=%.1f km",
+                path_id,
+                result.path_loss_db,
+                result.has_los,
+                result.distance_km,
+            )
+
+    except Exception as e:
+        logger.error("Tower path %s failed: %s", path_id, e)
+        with db_connection() as conn:
+            conn.execute("DELETE FROM tower_paths WHERE id = ?", (path_id,))
+            conn.commit()
+
+
+@app.post("/tower-paths", dependencies=[Depends(require_admin)])
+async def compute_tower_paths(
+    background_tasks: BackgroundTasks,
+    body: dict[str, Any] | None = None,
+) -> JSONResponse:
+    """Compute pairwise P2P paths between towers.
+
+    Optionally accepts ``{"tower_ids": ["id1", "id2", ...]}`` to limit
+    which towers are included. If omitted, all towers are used.
+
+    Existing paths between the selected towers are replaced.
+    """
+    with db_connection() as conn:
+        if body and "tower_ids" in body:
+            tower_ids: list[str] = body["tower_ids"]
+        else:
+            rows = conn.execute("SELECT id FROM towers").fetchall()
+            tower_ids = [r["id"] for r in rows]
+
+        if len(tower_ids) < 2:
+            return JSONResponse({"error": "Need at least 2 towers for path analysis"}, status_code=400)
+
+        # Generate all unique pairs (order-independent)
+        pairs: list[tuple[str, str]] = []
+        for i, a in enumerate(tower_ids):
+            for b in tower_ids[i + 1 :]:
+                pairs.append((a, b))
+
+        created_paths: list[dict[str, str]] = []
+        for tower_a_id, tower_b_id in pairs:
+            # Delete existing path between these two towers (either direction)
+            conn.execute(
+                "DELETE FROM tower_paths WHERE "
+                "(tower_a_id = ? AND tower_b_id = ?) OR (tower_a_id = ? AND tower_b_id = ?)",
+                (tower_a_id, tower_b_id, tower_b_id, tower_a_id),
+            )
+
+            path_id = str(uuid4())
+            conn.execute(
+                "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES (?, ?, ?)",
+                (path_id, tower_a_id, tower_b_id),
+            )
+            created_paths.append({"id": path_id, "tower_a_id": tower_a_id, "tower_b_id": tower_b_id})
+            background_tasks.add_task(run_tower_path_analysis, tower_a_id, tower_b_id, path_id)
+
+        conn.commit()
+
+    return JSONResponse({"paths": created_paths, "count": len(created_paths)})
+
+
+@app.get("/tower-paths")
+async def list_tower_paths() -> JSONResponse:
+    """Return all computed tower paths (public endpoint for visitors)."""
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT tp.id, tp.tower_a_id, tp.tower_b_id, tp.path_loss_db, tp.has_los, tp.distance_km, "
+            "tp.created_at, ta.params AS params_a, tb.params AS params_b "
+            "FROM tower_paths tp "
+            "JOIN towers ta ON ta.id = tp.tower_a_id "
+            "JOIN towers tb ON tb.id = tp.tower_b_id"
+        ).fetchall()
+
+    paths: list[dict[str, Any]] = []
+    for row in rows:
+        params_a = json.loads(row["params_a"])
+        params_b = json.loads(row["params_b"])
+        paths.append(
+            {
+                "id": row["id"],
+                "tower_a_id": row["tower_a_id"],
+                "tower_b_id": row["tower_b_id"],
+                "lat_a": params_a.get("lat", 0),
+                "lon_a": params_a.get("lon", 0),
+                "lat_b": params_b.get("lat", 0),
+                "lon_b": params_b.get("lon", 0),
+                "path_loss_db": row["path_loss_db"],
+                "has_los": bool(row["has_los"]) if row["has_los"] is not None else None,
+                "distance_km": row["distance_km"],
+                "created_at": row["created_at"],
+            }
+        )
+
+    return JSONResponse({"paths": paths})
+
+
+@app.delete("/tower-paths/{path_id}", dependencies=[Depends(require_admin)])
+async def delete_tower_path(path_id: str) -> JSONResponse:
+    """Delete a specific tower path."""
+    with db_connection() as conn:
+        cursor = conn.execute("DELETE FROM tower_paths WHERE id = ?", (path_id,))
+        conn.commit()
+
+    if cursor.rowcount == 0:
+        return JSONResponse({"error": "Path not found"}, status_code=404)
+
+    return JSONResponse({"message": "Path deleted", "path_id": path_id})
+
+
+# ---------------------------------------------------------------------------
+# Deadzone analysis endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get("/deadzones", response_model=DeadzoneAnalysisResponse)
+async def get_deadzones():
+    """Analyze coverage gaps across all completed tower simulations.
+
+    Requires at least 2 towers with completed GeoTIFF data. Merges their results
+    onto a common grid, identifies contiguous deadzone regions, and returns
+    up to 5 suggested tower sites for remediation.
+    """
+    geotiff_blobs: list[bytes] = []
+
+    with db_connection() as conn:
+        rows = conn.execute("SELECT geotiff FROM towers WHERE geotiff IS NOT NULL").fetchall()
+        for row in rows:
+            geotiff_blobs.append(row["geotiff"])
+
+    if len(geotiff_blobs) < 2:
+        return JSONResponse(
+            {"error": "Deadzone analysis requires at least 2 completed tower simulations"},
+            status_code=400,
+        )
+
+    try:
+        analyzer = DeadzoneAnalyzer(geotiff_blobs)
+        return analyzer.analyze()
+    except Exception as e:
+        logger.error("Deadzone analysis failed: %s", e)
+        return JSONResponse({"error": f"Deadzone analysis failed: {e!s}"}, status_code=500)
 
 
 app.mount("/", StaticFiles(directory="app/ui", html=True), name="ui")

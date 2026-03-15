@@ -1,14 +1,26 @@
 import { defineStore } from 'pinia';
-// import { useLocalStorage } from '@vueuse/core';
 import { randanimalSync } from 'randanimal';
 import L from 'leaflet';
 import GeoRasterLayer from 'georaster-layer-for-leaflet';
 import parseGeoraster from 'georaster';
 import 'leaflet-easyprint';
-import { type Site, type SplatParams, type MatrixConfig } from './types.ts';
+import { type Site, type SplatParams, type MatrixConfig, type TowerPath, type DeadzoneAnalysis, type TowerInfo } from './types.ts';
 import { cloneObject } from './utils.ts';
 import { redPinMarker } from './layers.ts';
-import { createOverlapHatchLayer, type TowerInfo } from './layers/OverlapHatchLayer.ts';
+import { createOverlapHatchLayer } from './layers/OverlapHatchLayer.ts';
+import { DeadzoneCanvasLayer } from './deadzoneLayer.ts';
+
+/**
+ * Map path loss (dB) and LOS status to a color for polyline rendering.
+ * Green = good (low loss, LOS), yellow = marginal, red = poor (high loss or NLOS).
+ */
+function pathLossColor(pathLossDb: number, hasLos: boolean | null): string {
+  if (hasLos === false) return '#e74c3c'; // red for NLOS
+  if (pathLossDb < 100) return '#2ecc71';
+  if (pathLossDb < 120) return '#f1c40f';
+  if (pathLossDb < 140) return '#e67e22';
+  return '#e74c3c';
+}
 
 // Default tower colors for visual differentiation
 const TOWER_COLORS = [
@@ -31,13 +43,20 @@ const useStore = defineStore('store', {
     return {
       map: undefined as undefined | L.Map,
       currentMarker: undefined as undefined | L.Marker,
-      localSites: [] as Site[], //useLocalStorage('localSites', ),
+      localSites: [] as Site[],
       overlapLayer: undefined as undefined | L.GridLayer,
       simulationState: 'idle',
       isAdmin: false,
       adminToken: localStorage.getItem('adminToken') || '',
       clientHardware: 'v3' as string,
       clientAntenna: 'bingfu_whip' as string,
+      towerPaths: [] as TowerPath[],
+      towerPathLayers: [] as L.Polyline[],
+      showTowerPaths: true,
+      showDeadzones: false,
+      deadzoneAnalysis: null as DeadzoneAnalysis | null,
+      deadzoneLayer: null as DeadzoneCanvasLayer | null,
+      suggestionMarkers: [] as L.Marker[],
       matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
         transmitter: {
@@ -89,6 +108,154 @@ const useStore = defineStore('store', {
       } catch (err) {
         console.warn('Error loading matrix config:', err);
       }
+    },
+    async loadTowerPaths(): Promise<void> {
+      try {
+        const response = await fetch('/tower-paths');
+        if (!response.ok) {
+          console.warn('Failed to load tower paths:', response.statusText);
+          return;
+        }
+        const data = await response.json();
+        this.towerPaths = data.paths ?? [];
+        this.renderTowerPaths();
+      } catch (err) {
+        console.warn('Error loading tower paths:', err);
+      }
+    },
+    renderTowerPaths(): void {
+      if (!this.map) return;
+
+      for (const layer of this.towerPathLayers) {
+        this.map.removeLayer(layer);
+      }
+      this.towerPathLayers = [];
+
+      if (!this.showTowerPaths) return;
+
+      for (const path of this.towerPaths) {
+        if (path.path_loss_db === null) continue;
+
+        const color = pathLossColor(path.path_loss_db, path.has_los);
+        const polyline = L.polyline(
+          [
+            [path.lat_a, path.lon_a],
+            [path.lat_b, path.lon_b],
+          ],
+          {
+            color,
+            weight: 3,
+            opacity: 0.8,
+            dashArray: path.has_los ? undefined : '8, 6',
+          },
+        );
+
+        const lossText =
+          path.path_loss_db !== null ? `${path.path_loss_db.toFixed(1)} dB` : 'pending';
+        const losText = path.has_los === null ? 'pending' : path.has_los ? 'Yes' : 'No';
+        const distText =
+          path.distance_km !== null ? `${path.distance_km.toFixed(1)} km` : 'pending';
+        polyline.bindPopup(
+          `<b>Path Loss:</b> ${lossText}<br><b>LOS:</b> ${losText}<br><b>Distance:</b> ${distText}`,
+        );
+
+        polyline.addTo(this.map);
+        this.towerPathLayers.push(polyline);
+      }
+    },
+    toggleTowerPaths(): void {
+      this.showTowerPaths = !this.showTowerPaths;
+      this.renderTowerPaths();
+    },
+    async fetchDeadzones(): Promise<void> {
+      if (this.localSites.length < 2) {
+        this._clearDeadzoneOverlay();
+        this.deadzoneAnalysis = null;
+        return;
+      }
+
+      try {
+        const response = await fetch('/deadzones');
+        if (!response.ok) {
+          console.warn('Deadzone analysis unavailable:', response.status);
+          return;
+        }
+        this.deadzoneAnalysis = await response.json();
+        if (this.showDeadzones) {
+          this._renderDeadzoneOverlay();
+        }
+      } catch (error) {
+        console.error('Failed to fetch deadzone analysis:', error);
+      }
+    },
+    toggleDeadzones(): void {
+      this.showDeadzones = !this.showDeadzones;
+      if (this.showDeadzones) {
+        this.fetchDeadzones();
+      } else {
+        this._clearDeadzoneOverlay();
+      }
+    },
+    _renderDeadzoneOverlay(): void {
+      if (!this.map || !this.deadzoneAnalysis) return;
+
+      this._clearDeadzoneOverlay();
+
+      const layer = new DeadzoneCanvasLayer(this.deadzoneAnalysis.regions);
+      layer.addTo(this.map);
+      this.deadzoneLayer = layer;
+
+      for (const suggestion of this.deadzoneAnalysis.suggestions) {
+        const icon = L.divIcon({
+          html: `<div style="
+            background: #0d6efd;
+            color: white;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            border: 2px solid white;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+          ">${suggestion.priority_rank}</div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+          className: '',
+        });
+
+        const marker = L.marker([suggestion.lat, suggestion.lon], { icon }).addTo(this.map);
+
+        marker.bindPopup(`
+          <div style="min-width: 200px">
+            <strong>Suggested Site #${suggestion.priority_rank}</strong><br>
+            <small>${suggestion.reason}</small><br>
+            <hr style="margin: 4px 0">
+            <b>Est. coverage:</b> ${suggestion.estimated_coverage_km2.toFixed(1)} km&sup2;<br>
+            <b>Location:</b> ${suggestion.lat.toFixed(4)}, ${suggestion.lon.toFixed(4)}<br>
+            <button class="btn btn-sm btn-primary mt-2" onclick="
+              window.dispatchEvent(new CustomEvent('prefill-transmitter', {
+                detail: { lat: ${suggestion.lat}, lon: ${suggestion.lon} }
+              }))
+            ">Use as transmitter site</button>
+          </div>
+        `);
+        this.suggestionMarkers.push(marker);
+      }
+    },
+    _clearDeadzoneOverlay(): void {
+      if (this.deadzoneLayer && this.map) {
+        this.map.removeLayer(this.deadzoneLayer as unknown as L.Layer);
+        this.deadzoneLayer = null;
+      }
+      for (const marker of this.suggestionMarkers) {
+        if (this.map) {
+          this.map.removeLayer(marker);
+        }
+      }
+      this.suggestionMarkers = [];
     },
     async login(password: string): Promise<boolean> {
       try {
@@ -168,6 +335,9 @@ const useStore = defineStore('store', {
       });
       this.redrawSites()
       this.updateOverlapLayer()
+      if (this.showDeadzones) {
+        this.fetchDeadzones()
+      }
     },
     toggleSiteVisibility(index: number) {
       if (index < 0 || index >= this.localSites.length) return;
@@ -300,11 +470,11 @@ const useStore = defineStore('store', {
       this.map.on("baselayerchange", () => {
         this.redrawSites(); // Re-apply the GeoRasterLayer on top
       });
-      this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site"); // Variable to hold the current marker
+      this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site");
       this.redrawSites();
+      this.loadTowerPaths();
     },
     async runSimulation() {
-      console.log('Simulation running...')
       try {
         // Collect input values
         const payload = {
@@ -342,7 +512,6 @@ const useStore = defineStore('store', {
           max_dbm: this.splatParams.display.max_dbm,
         };
     
-        console.log("Payload:", payload);
         this.simulationState = 'running';
     
         // Send the request to the backend's /predict endpoint
@@ -363,8 +532,6 @@ const useStore = defineStore('store', {
         const predictData = await predictResponse.json();
         const taskId = predictData.task_id;
     
-        console.log(`Prediction started with task ID: ${taskId}`);
-
         // Poll for task status and result
         const pollInterval = 1000; // 1 seconds
         const pollStatus = async () => {
@@ -376,11 +543,9 @@ const useStore = defineStore('store', {
           }
     
           const statusData = await statusResponse.json();
-          console.log("Task status:", statusData);
-    
+
           if (statusData.status === "completed") {
             this.simulationState = 'completed';
-            console.log("Simulation completed! Adding result to the map...");
 
             // Fetch the GeoTIFF data
             const resultResponse = await fetch(
@@ -405,6 +570,11 @@ const useStore = defineStore('store', {
               this.splatParams.transmitter.name = await randanimalSync();
               this.redrawSites();
               this.updateOverlapLayer();
+              // Reload tower paths since the new tower may have triggered path computation
+              setTimeout(() => this.loadTowerPaths(), 5000);
+              if (this.showDeadzones) {
+                this.fetchDeadzones();
+              }
             }
           }
           else if (statusData.status === "failed") {

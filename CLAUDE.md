@@ -6,28 +6,39 @@ LoRa Coverage Planner — a full-stack radio coverage prediction tool using SPLA
 
 ## Active Goals
 
-1. **Rebrand:** Remove all Meshtastic branding. Use generic LoRa terminology throughout (codebase, UI, assets, deployment config).
-2. **Podman migration:** Replace `Dockerfile` → `Containerfile`, `docker-compose.yml` → `compose.yml`. Target single-container deployment. Compose file kept for convenience.
-3. **Persistent towers & toggleable layers:** Tower data and simulation results persist in SQLite. Each tower's coverage layer is independently toggleable without triggering re-renders of other layers. Cached GeoTIFF results load instantly.
-4. **Meshcore tower path simulation:** Visualize inter-tower mesh paths (line-of-sight links, path loss) to form a tower web overlay. Requires pairwise SPLAT! point-to-point analysis between tower sites.
-5. **Hardware & environment presets:** Preselect hardware (Heltec V3, Heltec V4, custom) to auto-fill power/gain. Frequency determined by country/region (e.g., Canada legal frequency). Antenna preselection from a curated gain list. Height presets: ground level, first floor window, second floor window, gutter line, rooftop, ground tower, roof tower.
-6. **Admin/visitor roles:** Settings and simulation triggers require admin credentials. Visitors see cached simulations loaded instantly with no edit capability. Auth must gate the API, not just the UI.
+1. ~~**Rebrand:** Remove all Meshtastic branding. Use generic LoRa terminology throughout (codebase, UI, assets, deployment config).~~ **Done.**
+2. ~~**Podman migration:** Replace `Dockerfile` → `Containerfile`, `docker-compose.yml` → `compose.yml`. Target single-container deployment. Compose file kept for convenience.~~ **Done.**
+3. ~~**Persistent towers & toggleable layers:** Tower data and simulation results persist in SQLite. Each tower's coverage layer is independently toggleable without triggering re-renders of other layers. Cached GeoTIFF results load instantly.~~ **Done.**
+4. **Meshcore tower path simulation:** Visualize inter-tower mesh paths (line-of-sight links, path loss) to form a tower web overlay. Requires pairwise SPLAT! point-to-point analysis between tower sites. **In progress.**
+5. ~~**Hardware & environment presets:** Preselect hardware (Heltec V3, Heltec V4, custom) to auto-fill power/gain. Frequency determined by country/region (e.g., Canada legal frequency). Antenna preselection from a curated gain list. Height presets: ground level, first floor window, second floor window, gutter line, rooftop, ground tower, roof tower.~~ **Done.**
+6. ~~**Admin/visitor roles:** Settings and simulation triggers require admin credentials. Visitors see cached simulations loaded instantly with no edit capability. Auth must gate the API, not just the UI.~~ **Done.**
+7. ~~**Per-tower color rendering:** Assign each tower a distinct color from a 24-color palette for its coverage layer.~~ **Done.**
+8. ~~**Overlap hatching:** Render hatched overlay where multiple tower coverage areas overlap.~~ **Done.**
+9. **Deadzone remediation:** Identify and visualize gaps in coverage to guide new tower placement. **In progress.**
+10. ~~**Multi-source terrain:** Support multiple terrain data providers beyond AWS S3 elevation tiles.~~ **Done.**
+11. ~~**Client simulation matrix:** Generate combinatorial simulation configs from matrix of client hardware, antenna, frequency, and height parameters.~~ **Done.**
 
 ## Architecture
 
 ```
-src/                → Vue 3 + TypeScript frontend (Pinia store, Leaflet map, Bootstrap UI)
-app/                → FastAPI backend
-  main.py           → API endpoints + static file serving
-  services/         → SPLAT! subprocess wrapper (terrain download, format conversion, execution)
-  models/           → Pydantic request/response models
-  db/               → SQLite schema, migrations, access layer
-  ui/               → Build output directory (frontend assets copied here at build time)
-splat/              → Git submodule — SPLAT! C source
-public/             → Static assets (colormaps, logos)
-utils/              → Python utility scripts
-Containerfile       → Single-container podman build
-compose.yml         → Optional podman-compose for dev convenience
+src/                  → Vue 3 + TypeScript frontend (Pinia store, Leaflet map, Bootstrap UI)
+  components/         → Vue components (Transmitter, Receiver, TowerList, LoginForm, etc.)
+  presets/            → Hardware/antenna/frequency/height preset data (presets.json + typed wrappers)
+  layers/             → Custom Leaflet layers (OverlapHatchLayer)
+app/                  → FastAPI backend
+  main.py             → API endpoints + static file serving
+  auth.py             → Bearer-token admin auth with rate limiting
+  colors.py           → 24-color tower palette assignment
+  matrix.py           → Client simulation matrix config and combinations
+  services/           → SPLAT! wrapper + terrain data providers
+  models/             → Pydantic request/response models
+  db/                 → SQLite schema, connection factory
+  ui/                 → Build output (frontend assets, gitignored)
+splat/                → Git submodule — SPLAT! C source
+public/               → Static assets (colormaps)
+tests/                → pytest backend tests
+Containerfile         → Single-container podman build
+compose.yml           → Optional podman-compose for dev convenience
 ```
 
 **Data flow:** Vue form → Pinia store → POST /predict (admin-authed) → background task runs SPLAT! → tower config + GeoTIFF result persisted in SQLite → frontend polls /status, fetches /result GeoTIFF → parsed with georaster → rendered as independent GeoRasterLayer on Leaflet. Visitors hit GET /towers → load all persisted layers directly from SQLite — no simulation round-trip.
@@ -60,7 +71,7 @@ pnpm run test             # Frontend tests (Vitest)
 uv run pytest -v          # Backend tests (pytest)
 
 # Linting & Formatting
-uv run black app/ tests/  # Format Python (line length 88)
+uv run black app/ tests/  # Format Python (line length 120)
 uv run ruff check app/ tests/  # Lint Python
 pnpm run lint             # ESLint + Prettier (TypeScript/Vue)
 pnpm run format           # Prettier format only

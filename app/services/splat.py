@@ -3,6 +3,7 @@ import io
 import logging
 import math
 import os
+import re
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -21,6 +22,7 @@ from rasterio.enums import Resampling
 from rasterio.transform import Affine, from_bounds
 
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
+from app.models.PointToPointResult import PointToPointResult
 from app.services.terrain import DsmProvider, LulcClutterProvider, SrtmProvider, TerrainProvider
 
 logger = logging.getLogger(__name__)
@@ -28,28 +30,6 @@ logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("botocore").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
-
-
-def mismatch_loss_db(swr: float) -> float:
-    """Calculate SWR mismatch loss in dB."""
-    if swr <= 1.0:
-        return 0.0
-    reflection = ((swr - 1) / (swr + 1)) ** 2
-    return -10 * math.log10(1 - reflection)
-
-    # TODO: DRY — binary validation (lines 93-117) repeats the same
-    # isfile+access check four times. Replace with a loop over a dict of
-    # {attr_name: binary_name}, e.g.:
-    #   BINARIES = {"splat_binary": "splat", "splat_hd_binary": "splat-hd", ...}
-    #   for attr, name in BINARIES.items():
-    #       path = splat_dir / name
-    #       if not path.is_file() or not os.access(path, os.X_OK):
-    #           raise FileNotFoundError(...)
-    #       setattr(self, attr, path)
-    #
-    # TODO: Code standards — use pathlib.Path throughout this file per
-    # CLAUDE.md ("Prefer pathlib.Path over os.path"). splat_path, binary
-    # paths, tmpdir file joins, hgt_path, sdf_path all use os.path today.
 
 
 class Splat:
@@ -120,6 +100,14 @@ class Splat:
             f"Initialized SPLAT! with terrain tile cache at '{cache_dir}' with a size limit of {cache_size_gb} GB."
         )
 
+    @staticmethod
+    def mismatch_loss_db(swr: float) -> float:
+        """Calculate SWR mismatch loss in dB."""
+        if swr <= 1.0:
+            return 0.0
+        reflection = ((swr - 1) / (swr + 1)) ** 2
+        return -10 * math.log10(1 - reflection)
+
     def coverage_prediction(self, request: CoveragePredictionRequest) -> bytes:
         """
         Execute a SPLAT! coverage prediction using the provided CoveragePredictionRequest.
@@ -139,7 +127,6 @@ class Splat:
             try:
                 logger.debug(f"Temporary directory created: {tmpdir}")
 
-                # FIXME: Eventually support high-resolution terrain data
                 request.high_resolution = False
 
                 # Set hard limit of 100 km radius
@@ -169,9 +156,9 @@ class Splat:
                     qth_file.write(Splat._create_splat_qth("tx", request.lat, request.lon, request.tx_height))
 
                 # Apply SWR mismatch loss to effective TX power
-                effective_tx_power = request.tx_power - mismatch_loss_db(request.swr)
+                effective_tx_power = request.tx_power - Splat.mismatch_loss_db(request.swr)
                 logger.debug(
-                    f"SWR={request.swr}, mismatch_loss={mismatch_loss_db(request.swr):.2f} dB, "
+                    f"SWR={request.swr}, mismatch_loss={Splat.mismatch_loss_db(request.swr):.2f} dB, "
                     f"effective_tx_power={effective_tx_power:.2f} dBm (was {request.tx_power:.2f} dBm)"
                 )
 
@@ -264,10 +251,6 @@ class Splat:
                 logger.info("SPLAT! coverage prediction completed successfully.")
                 return geotiff_data
 
-            # TODO: Exception chaining — all except blocks in this file wrap
-            # and re-raise without chaining (raise RuntimeError(...) instead of
-            # raise RuntimeError(...) from e). This drops the original traceback.
-            # Add "from e" to every re-raise to preserve the cause chain.
             except Exception as e:
                 logger.error(f"Error during coverage prediction: {e}")
                 raise RuntimeError(f"Error during coverage prediction: {e}") from e
@@ -503,7 +486,7 @@ class Splat:
         colormap_name: str,
         min_dbm: float,
         max_dbm: float,
-    ) -> list:
+    ) -> np.ndarray:
         """Generate a list of RGB color values corresponding to the color map, min and max RSSI values in dBm."""
         return Splat._colormap_to_rgb(colormap_name, min_dbm, max_dbm, 255)
 
@@ -812,6 +795,194 @@ class Splat:
             except Exception as e:
                 logger.error(f"Error during conversion of {tile_name} to {sdf_filename}: {e}")
                 raise RuntimeError(f"Conversion error for {tile_name}: {e}") from e
+
+    def point_to_point(
+        self,
+        lat_a: float,
+        lon_a: float,
+        height_a: float,
+        lat_b: float,
+        lon_b: float,
+        height_b: float,
+        frequency_mhz: float = 905.0,
+        ground_dielectric: float = 15.0,
+        ground_conductivity: float = 0.005,
+        atmosphere_bending: float = 301.0,
+        radio_climate: str = "continental_temperate",
+        polarization: str = "vertical",
+    ) -> PointToPointResult:
+        """Run SPLAT! in point-to-point mode between two locations.
+
+        Args:
+            lat_a: Latitude of site A.
+            lon_a: Longitude of site A.
+            height_a: Antenna height AGL of site A in meters.
+            lat_b: Latitude of site B.
+            lon_b: Longitude of site B.
+            height_b: Antenna height AGL of site B in meters.
+            frequency_mhz: Operating frequency in MHz.
+            ground_dielectric: Earth dielectric constant.
+            ground_conductivity: Earth conductivity (S/m).
+            atmosphere_bending: Atmospheric bending constant (N-units).
+            radio_climate: ITM radio climate string.
+            polarization: Antenna polarization ('horizontal' or 'vertical').
+
+        Returns:
+            PointToPointResult with path_loss_db, has_los, and distance_km.
+
+        Raises:
+            RuntimeError: If SPLAT! execution or output parsing fails.
+        """
+        logger.info(
+            "Running P2P analysis: (%.4f, %.4f) -> (%.4f, %.4f) at %.1f MHz",
+            lat_a,
+            lon_a,
+            lat_b,
+            lon_b,
+            frequency_mhz,
+        )
+
+        # Calculate the rough distance to determine required tiles
+        mid_lat = (lat_a + lat_b) / 2.0
+        mid_lon = (lon_a + lon_b) / 2.0
+        earth_radius_km = 6371.0
+        dlat = math.radians(abs(lat_a - lat_b))
+        dlon = math.radians(abs(lon_a - lon_b))
+        a = (
+            math.sin(dlat / 2) ** 2
+            + math.cos(math.radians(lat_a)) * math.cos(math.radians(lat_b)) * math.sin(dlon / 2) ** 2
+        )
+        approx_distance_km = earth_radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        tile_radius_m = (approx_distance_km + 10.0) * 1000.0
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                # Download and convert required terrain tiles
+                required_tiles = Splat._calculate_required_terrain_tiles(mid_lat, mid_lon, tile_radius_m)
+                provider = self.terrain_providers.get("bare_earth")
+                for tile_name, sdf_name, _sdf_hd_name in required_tiles:
+                    tile_data = provider.get_tile(tile_name)
+                    sdf_data = self._convert_hgt_to_sdf(tile_data, tile_name, high_resolution=False)
+                    with open(Path(tmpdir) / sdf_name, "wb") as sdf_file:
+                        sdf_file.write(sdf_data)
+
+                # Write QTH files for both sites
+                with open(Path(tmpdir) / "site_a.qth", "wb") as f:
+                    f.write(Splat._create_splat_qth("site_a", lat_a, lon_a, height_a))
+                with open(Path(tmpdir) / "site_b.qth", "wb") as f:
+                    f.write(Splat._create_splat_qth("site_b", lat_b, lon_b, height_b))
+
+                # Write LRP file for propagation parameters (1 Watt ERP as baseline)
+                with open(Path(tmpdir) / "splat.lrp", "wb") as f:
+                    f.write(
+                        Splat._create_splat_lrp(
+                            ground_dielectric=ground_dielectric,
+                            ground_conductivity=ground_conductivity,
+                            atmosphere_bending=atmosphere_bending,
+                            frequency_mhz=frequency_mhz,
+                            radio_climate=radio_climate,
+                            polarization=polarization,
+                            situation_fraction=50.0,
+                            time_fraction=90.0,
+                            tx_power=30.0,  # 1 Watt in dBm
+                            tx_gain=0.0,
+                            system_loss=0.0,
+                        )
+                    )
+
+                # Run SPLAT! in point-to-point mode
+                splat_command = [
+                    self.splat_binary,
+                    "-t",
+                    "site_a.qth",
+                    "-r",
+                    "site_b.qth",
+                    "-metric",
+                    "-N",
+                    "-olditm",
+                ]
+                logger.debug("Executing SPLAT! P2P: %s", " ".join(splat_command))
+
+                result = subprocess.run(
+                    splat_command,
+                    cwd=tmpdir,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+                logger.debug("SPLAT! P2P stdout:\n%s", result.stdout)
+                if result.stderr:
+                    logger.debug("SPLAT! P2P stderr:\n%s", result.stderr)
+
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        f"SPLAT! P2P failed with return code {result.returncode}\n"
+                        f"Stdout: {result.stdout}\nStderr: {result.stderr}"
+                    )
+
+                return Splat._parse_p2p_output(result.stdout, approx_distance_km)
+
+            except Exception as e:
+                logger.error("Error during P2P analysis: %s", e)
+                raise RuntimeError(f"Error during P2P analysis: {e}") from e
+
+    @staticmethod
+    def _parse_p2p_output(stdout: str, fallback_distance_km: float) -> PointToPointResult:
+        """Parse SPLAT! point-to-point text output for path loss and LOS.
+
+        SPLAT! P2P mode prints a text report containing lines like:
+        - ``ITWOM Version 3.0 path loss: 123.45 dB``
+        - ``ITM path loss: 123.45 dB``
+        - ``Free space path loss: 89.12 dB``
+        - ``Distance to site_b: 12.34 kilometers``
+        - Lines containing "obstruction" indicate NLOS conditions.
+
+        Args:
+            stdout: The full stdout text from SPLAT! P2P execution.
+            fallback_distance_km: Haversine distance used if parsing fails.
+
+        Returns:
+            PointToPointResult with extracted values.
+        """
+        path_loss_db: float | None = None
+        distance_km: float = fallback_distance_km
+        has_los: bool = True
+
+        for line in stdout.splitlines():
+            line_stripped = line.strip()
+
+            # Parse path loss — prefer ITM/ITWOM over free-space
+            loss_match = re.search(r"(?:ITM|ITWOM)[^\d]*path loss:\s*([\d.]+)\s*dB", line_stripped, re.IGNORECASE)
+            if loss_match:
+                path_loss_db = float(loss_match.group(1))
+
+            # Fallback to free-space path loss if no ITM result
+            if path_loss_db is None:
+                fs_match = re.search(r"Free space path loss:\s*([\d.]+)\s*dB", line_stripped, re.IGNORECASE)
+                if fs_match:
+                    path_loss_db = float(fs_match.group(1))
+
+            # Parse distance
+            dist_match = re.search(r"Distance to\s+\w+:\s*([\d.]+)\s*kilometers", line_stripped, re.IGNORECASE)
+            if dist_match:
+                distance_km = float(dist_match.group(1))
+
+            # Check for obstructions (NLOS)
+            if "obstruction" in line_stripped.lower() and "no obstruction" not in line_stripped.lower():
+                has_los = False
+
+        # If no path loss was parsed, compute free-space path loss as fallback
+        if path_loss_db is None:
+            logger.warning("Could not parse path loss from SPLAT! output, using free-space estimate.")
+            # Free-space path loss: FSPL(dB) = 20*log10(d_km) + 20*log10(f_MHz) + 32.44
+            path_loss_db = (20 * math.log10(distance_km) + 20 * math.log10(905.0) + 32.44) if distance_km > 0 else 0.0
+
+        return PointToPointResult(
+            path_loss_db=path_loss_db,
+            has_los=has_los,
+            distance_km=round(distance_km, 3),
+        )
 
 
 if __name__ == "__main__":

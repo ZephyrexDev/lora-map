@@ -43,20 +43,33 @@
       </li>
     </ul>
     <p v-else class="text-muted small mb-0">No towers</p>
+    <div v-if="store.localSites.length >= 2" class="mt-2">
+      <button
+        type="button"
+        class="btn btn-sm w-100"
+        :class="store.showTowerPaths ? 'btn-outline-info' : 'btn-outline-secondary'"
+        @click="store.toggleTowerPaths()"
+      >
+        {{ store.showTowerPaths ? 'Hide Mesh Paths' : 'Show Mesh Paths' }}
+      </button>
+      <button
+        v-if="store.isAdmin"
+        type="button"
+        class="btn btn-sm btn-outline-warning w-100 mt-1"
+        @click="recomputePaths()"
+      >
+        Recompute Paths
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from "vue";
 import { useStore } from "../store.ts";
+import { type SimProgress } from "../types.ts";
 
 const store = useStore();
-
-interface SimProgress {
-  total: number;
-  completed: number;
-  pending: number;
-}
 
 const progress = ref<Record<string, SimProgress>>({});
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -116,4 +129,25 @@ onUnmounted(() => {
     pollTimer = null;
   }
 });
+
+async function recomputePaths(): Promise<void> {
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (store.adminToken) {
+      headers['Authorization'] = `Bearer ${store.adminToken}`;
+    }
+    const response = await fetch('/tower-paths', {
+      method: 'POST',
+      headers,
+    });
+    if (!response.ok) {
+      console.warn('Failed to recompute paths:', response.statusText);
+      return;
+    }
+    // Wait a few seconds for background tasks, then reload
+    setTimeout(() => store.loadTowerPaths(), 5000);
+  } catch (err) {
+    console.warn('Error recomputing paths:', err);
+  }
+}
 </script>
