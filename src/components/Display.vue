@@ -123,7 +123,6 @@ function onOverlapModeChange() {
 watch(
   () => display.overlay_transparency,
   () => {
-    store.redrawSites();
     store.updateOverlapLayer();
   },
 );

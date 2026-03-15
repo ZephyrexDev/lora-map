@@ -153,7 +153,6 @@ const useStore = defineStore("store", {
         }
 
         if (this.localSites.length > 0) {
-          this.redrawSites();
           this.updateOverlapLayer();
         }
       } catch (err) {
@@ -420,7 +419,6 @@ const useStore = defineStore("store", {
         return;
       }
       site.raster = geoRaster;
-      this.redrawSites();
       this.updateOverlapLayer();
     },
     setTxCoords(lat: number, lon: number) {
@@ -456,7 +454,6 @@ const useStore = defineStore("store", {
           map.removeLayer(layer);
         }
       });
-      this.redrawSites();
       this.updateOverlapLayer();
       if (this.showDeadzones) {
         void this.fetchDeadzones();
@@ -468,7 +465,6 @@ const useStore = defineStore("store", {
     toggleSiteVisibility(index: number) {
       if (index < 0 || index >= this.localSites.length) return;
       this.localSites[index].visible = !this.localSites[index].visible;
-      this.redrawSites();
       this.updateOverlapLayer();
     },
     redrawSites() {
@@ -688,7 +684,6 @@ const useStore = defineStore("store", {
               });
               this.currentMarker?.removeFrom(this.map as L.Map);
               this.splatParams.transmitter.name = randanimalSync();
-              this.redrawSites();
               this.updateOverlapLayer();
               // Reload tower paths after backend has time to compute
               this._pathReloadTimer = window.setTimeout(() => this.loadTowerPaths(), PATH_RELOAD_DELAY_MS);
