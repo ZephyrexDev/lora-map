@@ -317,3 +317,21 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Add `text-break` to simulation error alert to prevent horizontal overflow on narrow screens
 - [x] Add `form-control-sm` to LoginForm password input for consistency and prevent iOS auto-zoom
 - [x] Add `mb-2` to ClientSelector terrain row for consistent spacing with pending message visibility
+
+## 18. CLAUDE.md norm violations — frontend
+
+### `readonly` on immutable interfaces
+- [x] Add `readonly` to all fields on server-response interfaces: AnalysisBounds, SiteSuggestion, DeadzoneRegion, DeadzoneAnalysis, SimProgress, TowerInfo, OverlapHatchLayerOptions. Site.params/taskId/color also readonly (raster/visible are mutable). TowerPath and GeoRaster already had readonly.
+
+### DRY — duplicated label maps
+- [x] Extract hardware/antenna/terrain label maps to shared `src/presets/labels.ts` with `labelsToOptions()` helper. Both ClientSelector.vue and MatrixConfig.vue now import from there.
+
+### Single source of truth — inline types
+- [x] Move inline `Simulation` interface to `SimulationRecord` in src/types.ts. Used by both ClientSelector.vue and store.ts loadTowers.
+
+### Dead code
+- [x] Remove commented-out `// center:` in store.ts initMap
+- [x] Remove commented-out CSS block in App.vue `<style>`
+
+### Type safety
+- [x] Fix `setTxCoords` — wrap `.toFixed(6)` in `parseFloat()` so numbers reach the store

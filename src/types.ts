@@ -17,6 +17,7 @@ export interface GeoRaster {
   readonly projection: number;
 }
 
+/** Mutable — toggled by admin in MatrixConfig UI. */
 export interface MatrixConfig {
   hardware: Record<string, boolean>;
   antennas: Record<string, boolean>;
@@ -38,59 +39,71 @@ export interface TowerPath {
 }
 
 export interface AnalysisBounds {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
+  readonly north: number;
+  readonly south: number;
+  readonly east: number;
+  readonly west: number;
 }
 
 export interface SiteSuggestion {
-  lat: number;
-  lon: number;
-  estimated_coverage_km2: number;
-  priority_rank: number;
-  reason: string;
+  readonly lat: number;
+  readonly lon: number;
+  readonly estimated_coverage_km2: number;
+  readonly priority_rank: number;
+  readonly reason: string;
 }
 
 export interface DeadzoneRegion {
-  region_id: number;
-  center_lat: number;
-  center_lon: number;
-  area_km2: number;
-  priority_score: number;
-  pixel_count: number;
-  suggestion: SiteSuggestion | null;
+  readonly region_id: number;
+  readonly center_lat: number;
+  readonly center_lon: number;
+  readonly area_km2: number;
+  readonly priority_score: number;
+  readonly pixel_count: number;
+  readonly suggestion: SiteSuggestion | null;
 }
 
 export interface DeadzoneAnalysis {
-  bounds: AnalysisBounds;
-  total_coverage_km2: number;
-  total_deadzone_km2: number;
-  coverage_fraction: number;
-  regions: DeadzoneRegion[];
-  suggestions: SiteSuggestion[];
-  tower_count: number;
+  readonly bounds: AnalysisBounds;
+  readonly total_coverage_km2: number;
+  readonly total_deadzone_km2: number;
+  readonly coverage_fraction: number;
+  readonly regions: readonly DeadzoneRegion[];
+  readonly suggestions: readonly SiteSuggestion[];
+  readonly tower_count: number;
 }
 
 export interface TowerInfo {
-  raster: GeoRaster;
-  color: string;
-  index: number;
+  readonly raster: GeoRaster;
+  readonly color: string;
+  readonly index: number;
 }
 
 export interface SimProgress {
-  total: number;
-  completed: number;
-  pending: number;
+  readonly total: number;
+  readonly completed: number;
+  readonly pending: number;
 }
 
+/** A single simulation row returned by GET /towers/{id}/simulations. */
+export interface SimulationRecord {
+  readonly id: string;
+  readonly client_hardware: string;
+  readonly client_antenna: string;
+  readonly terrain_model: string;
+  readonly status: string;
+}
+
+/** Mutable — raster and visible are updated by store actions. */
 export interface Site {
-  params: SplatParams;
-  taskId: string;
+  readonly params: SplatParams;
+  readonly taskId: string;
   raster: GeoRaster;
-  color: string;
+  readonly color: string;
   visible: boolean;
 }
+
+/** Mutable — bound to Vue form inputs via v-model. */
 export interface SplatParams {
   transmitter: {
     name: string;

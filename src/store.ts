@@ -11,6 +11,7 @@ import {
   type TowerPath,
   type DeadzoneAnalysis,
   type TowerInfo,
+  type SimulationRecord,
 } from "./types.ts";
 import { cloneObject, pathLossColor, TOWER_COLORS, buildSimulationPayload } from "./utils.ts";
 import { redPinMarker } from "./layers.ts";
@@ -97,13 +98,7 @@ const useStore = defineStore("store", {
             const simResponse = await fetch(`/towers/${tower.id}/simulations?enabled_only=true`);
             if (!simResponse.ok) continue;
             const simData = await simResponse.json();
-            const sims: {
-              id: string;
-              client_hardware: string;
-              client_antenna: string;
-              terrain_model: string;
-              status: string;
-            }[] = simData.simulations ?? [];
+            const sims: SimulationRecord[] = simData.simulations ?? [];
             const completedSim =
               sims.find(
                 (s) =>
@@ -488,7 +483,6 @@ const useStore = defineStore("store", {
     },
     initMap() {
       this.map = L.map("map", {
-        // center: [51.102167, -114.098667],
         zoom: 10,
         zoomControl: false,
       });

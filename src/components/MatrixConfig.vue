@@ -55,28 +55,18 @@
 import { ref, reactive, onMounted } from "vue";
 import { useStore } from "../store.ts";
 import { arrayToRecord } from "../utils.ts";
+import { HARDWARE_LABELS, ANTENNA_LABELS, TERRAIN_LABELS, labelsToOptions } from "../presets/labels.ts";
 import type { MatrixConfig } from "../types.ts";
 
 const store = useStore();
 const showSaved = ref(false);
 
-const hardwareOptions = [
-  { key: "v3", label: "Heltec V3" },
-  { key: "v4", label: "Heltec V4" },
-];
-
-const antennaOptions = [
-  { key: "ribbed_spring_helical", label: "Ribbed Spring Helical" },
-  { key: "duck_stubby", label: "Duck Stubby" },
-  { key: "bingfu_whip", label: "Bingfu Whip" },
-  { key: "slinkdsco_omni", label: "Slinkdsco Omni" },
-];
-
-const terrainOptions = [
-  { key: "bare_earth", label: "Bare Earth (SRTM)" },
-  { key: "dsm", label: "Digital Surface Model" },
-  { key: "lulc_clutter", label: "LULC Clutter" },
-];
+const hardwareOptions = labelsToOptions(HARDWARE_LABELS);
+const antennaOptions = labelsToOptions(ANTENNA_LABELS);
+// Exclude weighted_aggregate — it's derived, not a real terrain simulation
+const terrainOptions = labelsToOptions(
+  Object.fromEntries(Object.entries(TERRAIN_LABELS).filter(([k]) => k !== "weighted_aggregate")),
+);
 
 const config = reactive<MatrixConfig>({
   hardware: { v3: true, v4: true },

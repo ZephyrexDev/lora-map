@@ -21,10 +21,10 @@ const MAX_STRIPE_WIDTH = 8;
 const STRIPE_PERIOD = 12;
 
 interface OverlapHatchLayerOptions extends L.GridLayerOptions {
-  towers: TowerInfo[];
-  mode: "hatch" | "blend";
-  minDbm: number;
-  maxDbm: number;
+  readonly towers: readonly TowerInfo[];
+  readonly mode: "hatch" | "blend";
+  readonly minDbm: number;
+  readonly maxDbm: number;
 }
 
 /**

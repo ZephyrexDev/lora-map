@@ -51,48 +51,31 @@
 import { ref, computed, onMounted } from "vue";
 import { useStore } from "../store.ts";
 import { isTiffBuffer } from "../utils.ts";
+import { HARDWARE_LABELS, ANTENNA_LABELS, TERRAIN_LABELS } from "../presets/labels.ts";
+import { type SimulationRecord } from "../types.ts";
 
 const store = useStore();
 const pendingMessage = ref("");
-
-const hardwareLabels: Record<string, string> = {
-  v3: "Heltec V3",
-  v4: "Heltec V4",
-};
-
-const antennaLabels: Record<string, string> = {
-  ribbed_spring_helical: "Ribbed Spring Helical",
-  duck_stubby: "Duck Stubby",
-  bingfu_whip: "Bingfu Whip",
-  slinkdsco_omni: "Slinkdsco Omni",
-};
-
-const terrainLabels: Record<string, string> = {
-  bare_earth: "Bare Earth (SRTM)",
-  dsm: "Digital Surface Model",
-  lulc_clutter: "LULC Clutter",
-  weighted_aggregate: "Weighted Aggregate",
-};
 
 const enabledHardware = computed(() => {
   if (!store.matrixConfig?.hardware) return [];
   return Object.entries(store.matrixConfig.hardware)
     .filter(([, enabled]) => enabled)
-    .map(([key]) => ({ key, label: hardwareLabels[key] || key }));
+    .map(([key]) => ({ key, label: HARDWARE_LABELS[key] || key }));
 });
 
 const enabledAntennas = computed(() => {
   if (!store.matrixConfig?.antennas) return [];
   return Object.entries(store.matrixConfig.antennas)
     .filter(([, enabled]) => enabled)
-    .map(([key]) => ({ key, label: antennaLabels[key] || key }));
+    .map(([key]) => ({ key, label: ANTENNA_LABELS[key] || key }));
 });
 
 const enabledTerrain = computed(() => {
   if (!store.matrixConfig?.terrain) return [];
   return Object.entries(store.matrixConfig.terrain)
     .filter(([, enabled]) => enabled)
-    .map(([key]) => ({ key, label: terrainLabels[key] || key }));
+    .map(([key]) => ({ key, label: TERRAIN_LABELS[key] || key }));
 });
 
 onMounted(async () => {
@@ -110,14 +93,6 @@ onMounted(async () => {
   }
 });
 
-interface Simulation {
-  id: string;
-  client_hardware: string;
-  client_antenna: string;
-  terrain_model: string;
-  status: string;
-}
-
 async function onSelectionChange() {
   pendingMessage.value = "";
 
@@ -127,7 +102,7 @@ async function onSelectionChange() {
       const response = await fetch(`/towers/${site.taskId}/simulations?enabled_only=true`);
       if (!response.ok) continue;
       const data = await response.json();
-      const simulations: Simulation[] = data.simulations ?? [];
+      const simulations: SimulationRecord[] = data.simulations ?? [];
 
       if (store.clientTerrain === "weighted_aggregate") {
         // Weighted aggregate is computed server-side from all three base terrain models

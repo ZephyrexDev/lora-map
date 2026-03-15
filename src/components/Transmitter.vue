@@ -313,7 +313,7 @@ const setWithMap = () => {
     let { lng } = e.latlng; // Get clicked location coordinates
     lng = ((((lng + 180) % 360) + 360) % 360) - 180;
 
-    store.setTxCoords(lat.toFixed(6), lng.toFixed(6)); // Update the store
+    store.setTxCoords(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
 
     // Remove the existing marker if it exists
     if (store.currentMarker) {
