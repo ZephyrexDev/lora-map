@@ -8,7 +8,7 @@
 - [x] Update `index.html` title and meta
 - [x] Remove `site.meshtastic.org` references from CORS config, comments, and deployment docs
 - [ ] Rename `randanimal` site names if they reference Meshtastic concepts
-- [ ] Update README.md
+- [x] Update README.md
 
 ## 2. Podman + single-container migration
 
