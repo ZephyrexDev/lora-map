@@ -1,0 +1,122 @@
+# CLAUDE.md
+
+## Project Overview
+
+LoRa Coverage Planner — a full-stack radio coverage prediction tool using SPLAT! (ITM/Longley-Rice model). Admins configure tower sites with hardware presets, run coverage simulations, and build multi-tower mesh path visualizations. Visitors see cached results with toggleable coverage layers on an interactive Leaflet map. Formerly Meshtastic Site Planner — all Meshtastic-specific branding is being replaced with generic LoRa terminology.
+
+## Active Goals
+
+1. **Rebrand:** Remove all Meshtastic branding. Use generic LoRa terminology throughout (codebase, UI, assets, deployment config).
+2. **Podman migration:** Replace `Dockerfile` → `Containerfile`, `docker-compose.yml` → `compose.yml`. Target single-container deployment. Compose file kept for convenience.
+3. **Persistent towers & toggleable layers:** Tower data and simulation results persist in SQLite. Each tower's coverage layer is independently toggleable without triggering re-renders of other layers. Cached GeoTIFF results load instantly.
+4. **Meshcore tower path simulation:** Visualize inter-tower mesh paths (line-of-sight links, path loss) to form a tower web overlay. Requires pairwise SPLAT! point-to-point analysis between tower sites.
+5. **Hardware & environment presets:** Preselect hardware (Heltec V3, Heltec V4, custom) to auto-fill power/gain. Frequency determined by country/region (e.g., Canada legal frequency). Antenna preselection from a curated gain list. Height presets: ground level, first floor window, second floor window, gutter line, rooftop, ground tower, roof tower.
+6. **Admin/visitor roles:** Settings and simulation triggers require admin credentials. Visitors see cached simulations loaded instantly with no edit capability. Auth must gate the API, not just the UI.
+
+## Architecture
+
+```
+src/                → Vue 3 + TypeScript frontend (Pinia store, Leaflet map, Bootstrap UI)
+app/                → FastAPI backend
+  main.py           → API endpoints + static file serving
+  services/         → SPLAT! subprocess wrapper (terrain download, format conversion, execution)
+  models/           → Pydantic request/response models
+  db/               → SQLite schema, migrations, access layer
+  ui/               → Build output directory (frontend assets copied here at build time)
+splat/              → Git submodule — SPLAT! C source
+public/             → Static assets (colormaps, logos)
+utils/              → Python utility scripts
+Containerfile       → Single-container podman build
+compose.yml         → Optional podman-compose for dev convenience
+```
+
+**Data flow:** Vue form → Pinia store → POST /predict (admin-authed) → background task runs SPLAT! → tower config + GeoTIFF result persisted in SQLite → frontend polls /status, fetches /result GeoTIFF → parsed with georaster → rendered as independent GeoRasterLayer on Leaflet. Visitors hit GET /towers → load all persisted layers directly from SQLite — no simulation round-trip.
+
+## Tech Stack
+
+- **Frontend:** Vue 3.5, TypeScript 5.9, Pinia, Leaflet 1.9, Bootstrap 5, Vite 7
+- **Backend:** Python 3.11, FastAPI, Pydantic 2, Uvicorn
+- **Storage:** SQLite (tower data, simulation results, GeoTIFF blobs)
+- **Data/Geo:** Rasterio, GDAL, NumPy, Matplotlib, Haversine, Boto3 (AWS S3 terrain tiles)
+- **Infra:** Podman (single container), sits behind an external HTTPS-terminating reverse proxy
+- **Package manager:** pnpm (frontend), pip (backend)
+
+## Commands
+
+```bash
+# Frontend
+pnpm install              # Install JS dependencies
+pnpm run dev              # Vite dev server
+pnpm run build            # Type-check + build + copy to app/ui
+
+# Backend
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8080
+
+# Container
+podman build -f Containerfile -t lora-planner .
+podman run -p 8080:8080 -v lora-data:/data lora-planner
+podman-compose up         # Dev convenience (optional)
+```
+
+## Code Standards
+
+### Python
+
+- Target Python 3.11. Use modern syntax: `match`, `|` union types, f-strings.
+- Use type hints on all function signatures. Use Pydantic models for API boundaries.
+- Follow PEP 8. Use snake_case for functions, variables, and modules. Use PascalCase for classes.
+- Keep functions short and single-purpose. Extract helpers only when reuse is concrete, not hypothetical.
+- Avoid mutable default arguments. Prefer `None` with internal initialization.
+- Use `logging` (module-level `logger = logging.getLogger(__name__)`) — never `print()` in backend code.
+- Handle exceptions at the appropriate level. Don't catch broad `Exception` unless re-raising or storing the error (as in the task runner pattern).
+- Prefer `pathlib.Path` over `os.path` for file operations.
+
+### TypeScript / Vue
+
+- Use TypeScript strict mode. All exports must be typed — no `any` except where third-party types are missing (e.g., georaster).
+- Define shared interfaces in `src/types.ts`. Keep the single source of truth for data shapes.
+- Use Vue 3 Composition API for new components. Existing Options API code does not need to be rewritten unless being significantly modified.
+- Use Pinia for shared state. Components should not hold state that other components need.
+- Prefer `const` over `let`. Never use `var`.
+- Use template literals over string concatenation.
+
+### General
+
+- **DRY:** Extract repeated logic into shared utilities only when the pattern appears 3+ times. Two similar blocks are fine — premature abstraction is worse than duplication.
+- **No dead code.** Remove commented-out imports, unused variables, and stale comments. Don't leave `// TODO` markers without a linked issue.
+- **Naming:** Names should describe *what* something is or does, not *how*. Prefer `terrain_tile_cache` over `dc` or `cache1`.
+- **No secrets in code.** AWS credentials, API keys, and admin credentials must come from environment variables — never hardcoded.
+- **Commits:** Write concise commit messages focused on *why*, not *what*. One logical change per commit.
+- **No HTTPS in app.** The app serves HTTP only on port 8080. TLS termination is handled by the external reverse proxy. Do not add SSL config, certificate handling, or HTTPS redirects.
+- **No CORS.** The reverse proxy serves both the API and static frontend on the same origin. Do not add CORS middleware.
+
+### Layer Management
+
+- Each tower site owns its own GeoRasterLayer instance. Toggling visibility uses `layer.setOpacity(0)` / `layer.setOpacity(original)` or Leaflet layer control — never remove/re-add, which triggers re-renders.
+- Tower data and simulation results are stored in SQLite on a persistent volume (`/data`).
+- The Pinia store tracks per-tower visibility state independently from raster data.
+
+### Hardware Presets
+
+- Define hardware specs (power, gain, supported frequencies) as static data — not inline in components. A single source file (e.g., `src/presets/hardware.ts` and/or `app/presets/`) shared between validation and UI.
+- Frequency options are keyed by country/region code. Height presets map human-readable labels to meter values.
+- "Custom" mode unlocks all fields for manual entry. Preset mode locks auto-filled fields in the UI but still sends raw values to the API — the backend is preset-agnostic.
+
+## File Conventions
+
+- Python model files use PascalCase filenames matching the class name (e.g., `CoveragePredictionRequest.py`).
+- Vue components use PascalCase filenames (e.g., `Transmitter.vue`).
+- TypeScript utility files use camelCase (e.g., `utils.ts`, `layers.ts`).
+- Built frontend assets go in `app/ui/` — this directory is gitignored and regenerated by `pnpm run build`.
+- Container files: `Containerfile` (not Dockerfile), `compose.yml` (not docker-compose.yml).
+- SQLite database and terrain tile cache live under `/data` inside the container (bind-mounted persistent volume).
+
+## Deployment
+
+- Single container exposes HTTP on port 8080. An external reverse proxy handles HTTPS termination and routing.
+- `podman run -p 8080:8080 -v lora-data:/data lora-planner` is the canonical production invocation.
+- SPLAT! binary is compiled from source during container build with `-march=native`.
+- Terrain tiles are streamed from AWS S3 (`elevation-tiles-prod`) and cached locally via diskcache under `/data`.
+- SQLite database at `/data/lora-planner.db` stores tower configs, simulation metadata, and GeoTIFF blobs.
+- Admin auth is enforced at the API layer (FastAPI dependency), not just hidden in the UI.
