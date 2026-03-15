@@ -142,13 +142,13 @@ Where multiple towers overlap, the area uses cross-hatched line shading — each
 - [x] Store raw dBm GeoTIFFs — colormap is now a frontend concern, not baked into the raster
 
 ### Phase 2 — Overlap detection & hatched rendering
-- [ ] Create a custom Leaflet canvas layer (`OverlapHatchLayer`) that composites all visible tower rasters
-- [ ] For each pixel, determine which towers have coverage (signal above threshold)
-- [ ] Single-tower pixel → solid color + alpha based on signal strength (same 10%–80% transparency scale)
-- [ ] Multi-tower pixel → draw diagonal stripes per tower, each in that tower's color
-- [ ] Line thickness scales with signal strength relative to other towers at that pixel (stronger = thicker lines)
-- [ ] Each tower gets a unique stripe angle (e.g., tower A = 45°, tower B = 135°) for natural cross-hatching
-- [ ] Toggle between "hatched overlap" and "simple alpha blend" modes in display settings
+- [x] Create a custom Leaflet canvas layer (`OverlapHatchLayer`) that composites all visible tower rasters
+- [x] For each pixel, determine which towers have coverage (signal above threshold)
+- [x] Single-tower pixel → solid color + alpha based on signal strength (same 10%–80% transparency scale)
+- [x] Multi-tower pixel → draw diagonal stripes per tower, each in that tower's color
+- [x] Line thickness scales with signal strength relative to other towers at that pixel (stronger = thicker lines)
+- [x] Each tower gets a unique stripe angle (e.g., tower A = 45°, tower B = 135°) for natural cross-hatching
+- [x] Toggle between "hatched overlap" and "simple alpha blend" modes in display settings
 
 ## 12. Deadzone remediation suggestion layer
 

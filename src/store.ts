@@ -1,210 +1,176 @@
-import { defineStore } from "pinia";
+import { defineStore } from 'pinia';
 // import { useLocalStorage } from '@vueuse/core';
-import { randanimalSync } from "randanimal";
-import L from "leaflet";
-import GeoRasterLayer from "georaster-layer-for-leaflet";
-import parseGeoraster from "georaster";
-import "leaflet-easyprint";
-import { type Site, type SplatParams, type MatrixConfig } from "./types.ts";
-import { cloneObject, dbmToRgba } from "./utils.ts";
-import { redPinMarker } from "./layers.ts";
+import { randanimalSync } from 'randanimal';
+import L from 'leaflet';
+import GeoRasterLayer from 'georaster-layer-for-leaflet';
+import parseGeoraster from 'georaster';
+import 'leaflet-easyprint';
+import { type Site, type SplatParams } from './types.ts';
+import { cloneObject } from './utils.ts';
+import { redPinMarker } from './layers.ts';
+import { createOverlapHatchLayer, type TowerInfo } from './layers/OverlapHatchLayer.ts';
 
-const useStore = defineStore("store", {
+// Default tower colors for visual differentiation
+const TOWER_COLORS = [
+  '#e6194b', // red
+  '#3cb44b', // green
+  '#4363d8', // blue
+  '#f58231', // orange
+  '#911eb4', // purple
+  '#42d4f4', // cyan
+  '#f032e6', // magenta
+  '#bfef45', // lime
+  '#fabed4', // pink
+  '#469990', // teal
+  '#dcbeff', // lavender
+  '#9a6324', // brown
+];
+
+const useStore = defineStore('store', {
   state() {
     return {
       map: undefined as undefined | L.Map,
       currentMarker: undefined as undefined | L.Marker,
       localSites: [] as Site[], //useLocalStorage('localSites', ),
-      simulationState: "idle",
-      isAdmin: false,
-      adminToken: localStorage.getItem("adminToken") || "",
-      clientHardware: "v3" as string,
-      clientAntenna: "bingfu_whip" as string,
-      matrixConfig: null as MatrixConfig | null,
+      overlapLayer: undefined as undefined | L.GridLayer,
+      simulationState: 'idle',
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
-          tx_lat: 53.5461,
-          tx_lon: -113.4937,
+          tx_lat: 51.102167,
+          tx_lon: -114.098667,
           tx_power: 0.1,
           tx_freq: 907.0,
           tx_height: 2.0,
-          tx_gain: 2.0,
-          tx_swr: 1.0,
-          tx_color: "",
+          tx_gain: 2.0
         },
         receiver: {
           rx_sensitivity: -130.0,
           rx_height: 1.0,
           rx_gain: 2.0,
-          rx_loss: 2.0,
+          rx_loss: 2.0
         },
         environment: {
-          radio_climate: "continental_temperate",
-          polarization: "vertical",
+          radio_climate: 'continental_temperate',
+          polarization: 'vertical',
           clutter_height: 1.0,
           ground_dielectric: 15.0,
           ground_conductivity: 0.005,
-          atmosphere_bending: 301.0,
+          atmosphere_bending: 301.0
         },
         simulation: {
           situation_fraction: 95.0,
           time_fraction: 95.0,
           simulation_extent: 30.0,
-          high_resolution: false,
+          high_resolution: false
         },
         display: {
-          color_scale: "plasma",
+          color_scale: 'plasma',
           min_dbm: -130.0,
           max_dbm: -80.0,
           overlay_transparency: 50,
+          overlapMode: 'hatch' as 'hatch' | 'blend'
         },
-      },
-    };
+      }
+    }
   },
   actions: {
-    async loadMatrixConfig(): Promise<void> {
-      try {
-        const response = await fetch("/matrix/config");
-        if (response.ok) {
-          this.matrixConfig = await response.json();
-        }
-      } catch (err) {
-        console.warn("Error loading matrix config:", err);
-      }
-    },
-    async swapSimulationLayer(towerId: string, simId: string): Promise<void> {
-      try {
-        const resultResponse = await fetch(`/simulations/${simId}/result`);
-        if (!resultResponse.ok) {
-          console.warn("Failed to fetch simulation result:", resultResponse.statusText);
-          return;
-        }
-        const arrayBuffer = await resultResponse.arrayBuffer();
-        const geoRaster = await parseGeoraster(arrayBuffer);
-
-        // Find the site matching this tower
-        const site = this.localSites.find((s: Site) => s.taskId === towerId);
-        if (!site) {
-          console.warn("No site found for tower:", towerId);
-          return;
-        }
-
-        // Remove old layer if present
-        if (site.layer && this.map) {
-          this.map.removeLayer(site.layer);
-        }
-
-        const minDbm = site.params?.display?.min_dbm ?? -130;
-        const maxDbm = site.params?.display?.max_dbm ?? -80;
-        const hex = site.color || "#4a90d9";
-        const rasterLayer = new GeoRasterLayer({
-          georaster: geoRaster,
-          resolution: 256,
-          pixelValuesToColorFn: (values: number[]) => dbmToRgba(values[0], hex, minDbm, maxDbm),
-        });
-        rasterLayer.addTo(this.map as L.Map);
-        rasterLayer.bringToFront();
-        site.raster = geoRaster;
-        site.layer = rasterLayer;
-      } catch (err) {
-        console.warn("Error swapping simulation layer:", err);
-      }
-    },
-    async login(password: string): Promise<boolean> {
-      try {
-        const response = await fetch("/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password }),
-        });
-        if (!response.ok) return false;
-        const data = await response.json();
-        this.adminToken = data.token;
-        this.isAdmin = true;
-        localStorage.setItem("adminToken", this.adminToken);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    logout() {
-      this.adminToken = "";
-      this.isAdmin = false;
-      localStorage.removeItem("adminToken");
-    },
-    async checkAuth(): Promise<void> {
-      if (!this.adminToken) return;
-      try {
-        const response = await fetch("/auth/check", {
-          headers: { Authorization: `Bearer ${this.adminToken}` },
-        });
-        if (response.ok) {
-          this.isAdmin = true;
-        } else {
-          this.adminToken = "";
-          this.isAdmin = false;
-          localStorage.removeItem("adminToken");
-        }
-      } catch {
-        this.adminToken = "";
-        this.isAdmin = false;
-        localStorage.removeItem("adminToken");
-      }
-    },
     setTxCoords(lat: number, lon: number) {
-      this.splatParams.transmitter.tx_lat = lat;
-      this.splatParams.transmitter.tx_lon = lon;
+      this.splatParams.transmitter.tx_lat = lat
+      this.splatParams.transmitter.tx_lon = lon
     },
     removeSite(index: number) {
       if (!this.map) {
-        return;
+        return
       }
-      const site = this.localSites[index];
-      if (site && site.layer) {
-        this.map.removeLayer(site.layer);
-      }
-      this.localSites.splice(index, 1);
+      this.localSites.splice(index, 1)
+      this.map.eachLayer((layer: L.Layer) => {
+        if (layer instanceof GeoRasterLayer) {
+          this.map!.removeLayer(layer);
+        }
+      });
+      this.redrawSites()
+      this.updateOverlapLayer()
+    },
+    toggleSiteVisibility(index: number) {
+      if (index < 0 || index >= this.localSites.length) return;
+      this.localSites[index].visible = !this.localSites[index].visible;
+      this.redrawSites();
+      this.updateOverlapLayer();
     },
     redrawSites() {
       if (!this.map) {
         return;
       }
 
-      this.localSites.forEach((site: Site) => {
-        if (site.raster && !site.layer) {
-          const minDbm = site.params?.display?.min_dbm ?? -130;
-          const maxDbm = site.params?.display?.max_dbm ?? -80;
-          const hex = site.color || "#4a90d9";
-          const rasterLayer = new GeoRasterLayer({
-            georaster: site.raster,
-            resolution: 256,
-            pixelValuesToColorFn: (values: number[]) => dbmToRgba(values[0], hex, minDbm, maxDbm),
-          });
-          if (!site.visible) {
-            rasterLayer.setOpacity(0);
-          }
-          rasterLayer.addTo(this.map as L.Map);
-          site.layer = rasterLayer;
-        }
-        if (site.layer) {
-          site.layer.bringToFront();
+      // Remove existing GeoRasterLayers
+      this.map.eachLayer((layer: L.Layer) => {
+        if (layer instanceof GeoRasterLayer) {
+          this.map!.removeLayer(layer);
         }
       });
+
+      // Determine if overlap layer is active (will handle rendering)
+      const visibleSites = this.localSites.filter((s: Site) => s.visible);
+      const overlapActive = visibleSites.length >= 2;
+
+      // Add GeoRasterLayers back to the map
+      this.localSites.forEach((site: Site) => {
+        if (!site.visible) return;
+        const rasterLayer = new GeoRasterLayer({
+          georaster: {...site}.raster,
+          opacity: overlapActive ? 0 : 0.7,
+          noDataValue: 255,
+          resolution: 256,
+        });
+        rasterLayer.addTo(this.map as L.Map);
+        rasterLayer.bringToFront();
+      });
     },
-    toggleSiteVisibility(index: number) {
-      const site = this.localSites[index];
-      if (!site) {
+    updateOverlapLayer() {
+      if (!this.map) return;
+
+      // Remove old overlap layer if it exists
+      if (this.overlapLayer) {
+        this.map.removeLayer(this.overlapLayer);
+        this.overlapLayer = undefined;
+      }
+
+      // Collect all visible sites that have raster data
+      const visibleSites = this.localSites.filter(
+        (s: Site) => s.visible && s.raster
+      );
+
+      // Only create overlap layer when 2+ visible towers
+      if (visibleSites.length < 2) {
+        // Restore individual layer opacities by redrawing
+        this.redrawSites();
         return;
       }
-      site.visible = !site.visible;
-      if (site.visible) {
-        site.layer?.setOpacity(1);
-      } else {
-        site.layer?.setOpacity(0);
-      }
+
+      // Build tower info array
+      const towers: TowerInfo[] = visibleSites.map((site: Site, i: number) => ({
+        raster: site.raster,
+        color: site.color,
+        index: i,
+      }));
+
+      // Create the overlap layer
+      this.overlapLayer = createOverlapHatchLayer({
+        towers,
+        mode: this.splatParams.display.overlapMode,
+        minDbm: this.splatParams.display.min_dbm,
+        maxDbm: this.splatParams.display.max_dbm,
+        opacity: 1,
+      });
+
+      this.overlapLayer.addTo(this.map);
+      this.overlapLayer.bringToFront();
+
+      // Ensure individual GeoRasterLayers are hidden (overlap layer handles rendering)
+      this.redrawSites();
     },
-    initMap() {
+    initMap() {     
       this.map = L.map("map", {
         // center: [51.102167, -114.098667],
         zoom: 10,
@@ -215,118 +181,53 @@ const useStore = defineStore("store", {
 
       L.control.zoom({ position: "bottomleft" }).addTo(this.map as L.Map);
 
-      const cartoLight = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        attribution: "© OpenStreetMap contributors © CARTO",
+      const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap contributors © CARTO',
       });
 
-      const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
+      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+      })
+
+      const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri — Source: Esri, USGS, NOAA',
       });
 
-      const satelliteLayer = L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        {
-          attribution: "Tiles © Esri — Source: Esri, USGS, NOAA",
-        },
-      );
-
-      const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
-        attribution: "Map data: © OpenStreetMap contributors, SRTM | OpenTopoMap",
+      const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data: © OpenStreetMap contributors, SRTM | OpenTopoMap',
       });
 
       streetLayer.addTo(this.map as L.Map);
 
       // Base Layers
       const baseLayers = {
-        OSM: streetLayer,
+        "OSM": streetLayer,
         "Carto Light": cartoLight,
-        Satellite: satelliteLayer,
-        "Topo Map": topoLayer,
+        "Satellite": satelliteLayer,
+        "Topo Map": topoLayer
       };
 
       // EasyPrint control
-      (L as any)
-        .easyPrint({
-          title: "Save",
-          position: "bottomleft",
-          sizeModes: ["A4Portrait", "A4Landscape"],
-          filename: "sites",
-          exportOnly: true,
-        })
-        .addTo(this.map as L.Map);
+      (L as any).easyPrint({
+        title: "Save",
+        position: "bottomleft",
+        sizeModes: ["A4Portrait", "A4Landscape"],
+        filename: "sites",
+        exportOnly: true
+      }).addTo(this.map as L.Map);
 
-      L.control
-        .layers(
-          baseLayers,
-          {},
-          {
-            position: "bottomleft",
-          },
-        )
-        .addTo(this.map as L.Map);
+      L.control.layers(baseLayers, {}, {
+        position: "bottomleft",
+      }).addTo(this.map as L.Map);
 
       this.map.on("baselayerchange", () => {
-        this.localSites.forEach((site: Site) => {
-          site.layer?.bringToFront();
-        });
+        this.redrawSites(); // Re-apply the GeoRasterLayer on top
       });
-      this.currentMarker = L.marker(position, { icon: redPinMarker })
-        .addTo(this.map as L.Map)
-        .bindPopup("Transmitter site"); // Variable to hold the current marker
+      this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site"); // Variable to hold the current marker
       this.redrawSites();
-      this.loadTowers();
-    },
-    async loadTowers() {
-      try {
-        const response = await fetch("/towers");
-        if (!response.ok) {
-          console.warn("Failed to load towers:", response.statusText);
-          return;
-        }
-        const towers = await response.json();
-        for (const tower of towers) {
-          // Skip towers already present in localSites (matched by taskId)
-          if (this.localSites.some((s: Site) => s.taskId === tower.task_id)) {
-            continue;
-          }
-          const site: Site = {
-            params: tower.params ?? {
-              transmitter: {
-                name: tower.name ?? "Unknown",
-                tx_lat: tower.lat ?? 0,
-                tx_lon: tower.lon ?? 0,
-                tx_power: 0,
-                tx_freq: 0,
-                tx_height: 0,
-                tx_gain: 0,
-                tx_swr: 1,
-              },
-              receiver: { rx_sensitivity: -130, rx_height: 1, rx_gain: 2, rx_loss: 2 },
-              environment: {
-                radio_climate: "continental_temperate",
-                polarization: "vertical",
-                clutter_height: 1,
-                ground_dielectric: 15,
-                ground_conductivity: 0.005,
-                atmosphere_bending: 301,
-              },
-              simulation: { situation_fraction: 95, time_fraction: 95, simulation_extent: 30, high_resolution: false },
-              display: { color_scale: "plasma", min_dbm: -130, max_dbm: -80, overlay_transparency: 50 },
-            },
-            taskId: tower.task_id ?? "",
-            raster: null,
-            layer: undefined,
-            visible: true,
-            color: tower.color || tower.params?.transmitter?.tx_color || "#4a90d9",
-          };
-          this.localSites.push(site);
-        }
-      } catch (err) {
-        console.warn("Error loading towers:", err);
-      }
     },
     async runSimulation() {
-      console.log("Simulation running...");
+      console.log('Simulation running...')
       try {
         // Collect input values
         const payload = {
@@ -336,7 +237,6 @@ const useStore = defineStore("store", {
           tx_height: this.splatParams.transmitter.tx_height,
           tx_power: 10 * Math.log10(this.splatParams.transmitter.tx_power) + 30,
           tx_gain: this.splatParams.transmitter.tx_gain,
-          swr: this.splatParams.transmitter.tx_swr,
           frequency_mhz: this.splatParams.transmitter.tx_freq,
 
           // Receiver parameters
@@ -364,104 +264,85 @@ const useStore = defineStore("store", {
           min_dbm: this.splatParams.display.min_dbm,
           max_dbm: this.splatParams.display.max_dbm,
         };
-
+    
         console.log("Payload:", payload);
-        this.simulationState = "running";
-
+        this.simulationState = 'running';
+    
         // Send the request to the backend's /predict endpoint
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (this.adminToken) {
-          headers["Authorization"] = `Bearer ${this.adminToken}`;
-        }
-
         const predictResponse = await fetch("/predict", {
           method: "POST",
-          headers,
+          headers: {
+            "Content-Type": "application/json",
+          },
           body: JSON.stringify(payload),
         });
-
+    
         if (!predictResponse.ok) {
-          this.simulationState = "failed";
+          this.simulationState = 'failed';
           const errorDetails = await predictResponse.text();
           throw new Error(`Failed to start prediction: ${errorDetails}`);
         }
-
+    
         const predictData = await predictResponse.json();
         const taskId = predictData.task_id;
-
+    
         console.log(`Prediction started with task ID: ${taskId}`);
 
-        const maxRetries = 300; // 5 minutes at initial 1s intervals
-        const maxInterval = 10000; // 10 seconds cap
-        let retryCount = 0;
-        let currentInterval = 1000; // Start at 1 second
-
+        // Poll for task status and result
+        const pollInterval = 1000; // 1 seconds
         const pollStatus = async () => {
-          if (retryCount >= maxRetries) {
-            console.error(`Polling timed out after ${retryCount} retries.`);
-            this.simulationState = "failed";
-            return;
-          }
-          retryCount++;
-
-          const statusResponse = await fetch(`/status/${taskId}`);
+          const statusResponse = await fetch(
+            `/status/${taskId}`,
+          );
           if (!statusResponse.ok) {
             throw new Error("Failed to fetch task status.");
           }
-
+    
           const statusData = await statusResponse.json();
           console.log("Task status:", statusData);
-
+    
           if (statusData.status === "completed") {
-            this.simulationState = "completed";
+            this.simulationState = 'completed';
             console.log("Simulation completed! Adding result to the map...");
 
             // Fetch the GeoTIFF data
-            const resultResponse = await fetch(`/result/${taskId}`);
+            const resultResponse = await fetch(
+              `/result/${taskId}`,
+            );
             if (!resultResponse.ok) {
               throw new Error("Failed to fetch simulation result.");
-            } else {
+            }
+            else
+            {
               const arrayBuffer = await resultResponse.arrayBuffer();
               const geoRaster = await parseGeoraster(arrayBuffer);
-
-              const siteColor = this.splatParams.transmitter.tx_color || "#4a90d9";
-              const simMinDbm = this.splatParams.display.min_dbm;
-              const simMaxDbm = this.splatParams.display.max_dbm;
-              const rasterLayer = new GeoRasterLayer({
-                georaster: geoRaster,
-                resolution: 256,
-                pixelValuesToColorFn: (values: number[]) => dbmToRgba(values[0], siteColor, simMinDbm, simMaxDbm),
-              });
-              rasterLayer.addTo(this.map as L.Map);
-              rasterLayer.bringToFront();
-
+              const colorIndex = this.localSites.length % TOWER_COLORS.length;
               this.localSites.push({
                 params: cloneObject(this.splatParams),
                 taskId,
                 raster: geoRaster,
-                layer: rasterLayer,
+                color: TOWER_COLORS[colorIndex],
                 visible: true,
-                color: siteColor,
               });
               this.currentMarker!.removeFrom(this.map as L.Map);
               this.splatParams.transmitter.name = await randanimalSync();
+              this.redrawSites();
+              this.updateOverlapLayer();
             }
-          } else if (statusData.status === "failed") {
-            this.simulationState = "failed";
+          }
+          else if (statusData.status === "failed") {
+            this.simulationState = 'failed';
           } else {
-            setTimeout(pollStatus, currentInterval);
-            currentInterval = Math.min(currentInterval * 2, maxInterval); // Exponential backoff, capped at 10s
+            setTimeout(pollStatus, pollInterval); // Retry after interval
           }
         };
-
+    
         pollStatus(); // Start polling
       } catch (error) {
         console.error("Error:", error);
       }
-    },
-  },
+    }
+  }
 });
 
-export { useStore };
+export { useStore }
