@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_admin, router as auth_router
-from app.db import get_db, init_db
+from app.db import db_connection, init_db
 from app.db.connection import DEFAULT_DB_PATH
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.services.splat import Splat
@@ -52,15 +52,6 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 
 
-# TODO: DRY — every endpoint and run_splat repeats the same
-# conn = get_db() / try / finally: conn.close() pattern (5 occurrences).
-# Make get_db() a context manager (contextlib.closing or __enter__/__exit__)
-# so callers use "with get_db() as conn:" instead. This also prevents
-# leaked connections if code between get_db() and try raises.
-#
-# TODO: DRY — init_db() in schema.py opens its own raw sqlite3.connect()
-# and re-applies the same PRAGMAs that get_db() sets. Have init_db() call
-# get_db() instead to keep PRAGMA config in one place.
 def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -> None:
     """Execute the SPLAT! coverage prediction and persist results to SQLite.
 
@@ -73,8 +64,7 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
         logger.info("Starting SPLAT! coverage prediction for task %s.", task_id)
         geotiff_data: bytes = splat_service.coverage_prediction(request)
 
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
             conn.execute(
                 "UPDATE towers SET geotiff = ?, updated_at = ? WHERE id = ?",
@@ -86,20 +76,15 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
             )
             conn.commit()
             logger.info("Task %s completed successfully.", task_id)
-        finally:
-            conn.close()
 
     except Exception as e:
         logger.error("Error in SPLAT! task %s: %s", task_id, e)
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             conn.execute(
                 "UPDATE tasks SET status = ?, error = ? WHERE id = ?",
                 ("failed", str(e), task_id),
             )
             conn.commit()
-        finally:
-            conn.close()
 
 
 @app.post("/predict", dependencies=[Depends(require_admin)])
@@ -122,8 +107,7 @@ async def predict(
     task_id: str = str(uuid4())
     tower_id: str = str(uuid4())
 
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
             (tower_id, "Unnamed", json.dumps(payload.model_dump())),
@@ -133,8 +117,6 @@ async def predict(
             (task_id, tower_id, "processing"),
         )
         conn.commit()
-    finally:
-        conn.close()
 
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
     return JSONResponse({"task_id": task_id, "tower_id": tower_id})
@@ -150,13 +132,10 @@ async def get_status(task_id: str) -> JSONResponse:
     Returns:
         JSONResponse with the task status, or 404 if not found.
     """
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         row = conn.execute(
             "SELECT status, error FROM tasks WHERE id = ?", (task_id,)
         ).fetchone()
-    finally:
-        conn.close()
 
     if row is None:
         logger.warning("Task %s not found.", task_id)
@@ -182,8 +161,7 @@ async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
     Returns:
         StreamingResponse with the GeoTIFF on success, or JSONResponse with status.
     """
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         task_row = conn.execute(
             "SELECT tower_id, status, error FROM tasks WHERE id = ?", (task_id,)
         ).fetchone()
@@ -219,8 +197,6 @@ async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
 
         logger.info("Task %s is still processing.", task_id)
         return JSONResponse({"task_id": task_id, "status": "processing"})
-    finally:
-        conn.close()
 
 
 @app.get("/towers")
@@ -230,13 +206,10 @@ async def list_towers() -> JSONResponse:
     Returns:
         JSONResponse with a list of tower objects.
     """
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         rows = conn.execute(
             "SELECT id, name, params, created_at, updated_at FROM towers"
         ).fetchall()
-    finally:
-        conn.close()
 
     towers: list[dict[str, Any]] = [
         {
@@ -261,12 +234,9 @@ async def delete_tower(tower_id: str) -> JSONResponse:
     Returns:
         JSONResponse confirming deletion or 404 if not found.
     """
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         cursor = conn.execute("DELETE FROM towers WHERE id = ?", (tower_id,))
         conn.commit()
-    finally:
-        conn.close()
 
     if cursor.rowcount == 0:
         return JSONResponse({"error": "Tower not found"}, status_code=404)

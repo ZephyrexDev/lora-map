@@ -19,8 +19,8 @@ const useStore = defineStore('store', {
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
-          tx_lat: 51.102167,
-          tx_lon: -114.098667,
+          tx_lat: 53.5461,
+          tx_lon: -113.4937,
           tx_power: 0.1,
           tx_freq: 907.0,
           tx_height: 2.0,
@@ -105,8 +105,8 @@ const useStore = defineStore('store', {
       // Add GeoRasterLayers back to the map
       this.localSites.forEach((site: Site) => {
         const rasterLayer = new GeoRasterLayer({
-          georaster: {...site}.raster,
-          opacity: 0.7,
+          georaster: site.raster,
+          opacity: this.splatParams.display.overlay_transparency / 100,
           noDataValue: 255,
           resolution: 256,
         });

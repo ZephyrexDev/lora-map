@@ -92,43 +92,20 @@ class Splat:
                 f"Provided SPLAT! path '{splat_path}' is not a valid directory."
             )
 
-        # SPLAT! binaries
-        self.splat_binary = os.path.join(splat_path, "splat")  # core SPLAT! program
-        self.splat_hd_binary = os.path.join(
-            splat_path, "splat-hd"
-        )  # used instead of the splat binary when using the 1-arcsecond / 30 meter resolution terrain data.
-        self.srtm2sdf_binary = os.path.join(
-            splat_path, "srtm2sdf"
-        )  # convert 3-arcsecond resolution srtm .hgt terrain tiles to SPLAT! .sdf terrain tiles.
-        self.srtm2sdf_hd_binary = os.path.join(
-            splat_path, "srtm2sdf-hd"
-        )  # used instead of srtm2sdf when using the 1-arcsecond / 30 meter resolution terrain data.
-
-        # Check the SPLAT! binaries exist and are executable
-        if not os.path.isfile(self.splat_binary) or not os.access(
-            self.splat_binary, os.X_OK
-        ):
-            raise FileNotFoundError(
-                f"'splat' binary not found or not executable at '{self.splat_binary}'"
-            )
-        if not os.path.isfile(self.splat_hd_binary) or not os.access(
-            self.splat_hd_binary, os.X_OK
-        ):
-            raise FileNotFoundError(
-                f"'splat-hd' binary not found or not executable at '{self.splat_hd_binary}'"
-            )
-        if not os.path.isfile(self.srtm2sdf_binary) or not os.access(
-            self.srtm2sdf_binary, os.X_OK
-        ):
-            raise FileNotFoundError(
-                f"'srtm2sdf_binary' binary not found or not executable at '{self.srtm2sdf_binary}'"
-            )
-        if not os.path.isfile(self.srtm2sdf_hd_binary) or not os.access(
-            self.srtm2sdf_hd_binary, os.X_OK
-        ):
-            raise FileNotFoundError(
-                f"'srtm2sdf_hd_binary' binary not found or not executable at '{self.srtm2sdf_hd_binary}'"
-            )
+        # SPLAT! binaries — validate that each exists and is executable
+        required_binaries = {
+            "splat_binary": "splat",            # core SPLAT! program
+            "splat_hd_binary": "splat-hd",      # used for 1-arcsecond / 30 meter resolution terrain data
+            "srtm2sdf_binary": "srtm2sdf",      # convert 3-arcsecond srtm .hgt tiles to SPLAT! .sdf tiles
+            "srtm2sdf_hd_binary": "srtm2sdf-hd",  # used instead of srtm2sdf for 1-arcsecond data
+        }
+        for attr, binary_name in required_binaries.items():
+            binary_path = os.path.join(splat_path, binary_name)
+            if not os.path.isfile(binary_path) or not os.access(binary_path, os.X_OK):
+                raise FileNotFoundError(
+                    f"'{attr}' binary not found or not executable at '{binary_path}'"
+                )
+            setattr(self, attr, binary_path)
 
         self.tile_cache = Cache(
             cache_dir, size_limit=int(cache_size_gb * 1024 * 1024 * 1024)
@@ -279,7 +256,7 @@ class Splat:
             # Add "from e" to every re-raise to preserve the cause chain.
             except Exception as e:
                 logger.error(f"Error during coverage prediction: {e}")
-                raise RuntimeError(f"Error during coverage prediction: {e}")
+                raise RuntimeError(f"Error during coverage prediction: {e}") from e
 
     @staticmethod
     def _calculate_required_terrain_tiles(
@@ -387,7 +364,7 @@ class Splat:
             return contents.encode('utf-8')  # Return as bytes
         except Exception as e:
             logger.error(f"Error generating .qth file content: {e}")
-            raise ValueError(f"Failed to generate .qth content: {e}")
+            raise ValueError(f"Failed to generate .qth content: {e}") from e
 
     @staticmethod
     def _create_splat_lrp(
@@ -525,7 +502,7 @@ class Splat:
 
         except Exception as e:
             logger.error(f"Error generating .dcf file content: {e}")
-            raise ValueError(f"Failed to generate .dcf content: {e}")
+            raise ValueError(f"Failed to generate .dcf content: {e}") from e
 
     @staticmethod
     def create_splat_colorbar(
@@ -644,7 +621,7 @@ class Splat:
 
         except Exception as e:
             logger.error(f"Error during GeoTIFF generation: {e}")
-            raise RuntimeError(f"Error during GeoTIFF generation: {e}")
+            raise RuntimeError(f"Error during GeoTIFF generation: {e}") from e
 
     # TODO: DRY — _download_terrain_tile duplicates the S3 fetch + cache
     # store pattern for the V1 fallback (lines 648-656 repeat 643-647).
@@ -781,7 +758,7 @@ class Splat:
                         logger.info(f"Successfully downsampled {hgt_path}.")
                     except Exception as e:
                         logger.error(f"Failed to downsample {hgt_path}: {e}")
-                        raise RuntimeError(f"Downsampling error for {hgt_path}: {e}")
+                        raise RuntimeError(f"Downsampling error for {hgt_path}: {e}") from e
 
                 # Call srtm2sdf or srtm2sdf-hd in the temporary directory
                 cmd = self.srtm2sdf_hd_binary if high_resolution else self.srtm2sdf_binary
@@ -813,11 +790,11 @@ class Splat:
             except subprocess.CalledProcessError as e:
                 logger.error(f"Subprocess error during conversion of {tile_name}: {e}")
                 logger.error(f"stderr: {e.stderr}")
-                raise RuntimeError(f"Subprocess error during conversion of {tile_name}: {e}")
+                raise RuntimeError(f"Subprocess error during conversion of {tile_name}: {e}") from e
 
             except Exception as e:
                 logger.error(f"Error during conversion of {tile_name} to {sdf_filename}: {e}")
-                raise RuntimeError(f"Conversion error for {tile_name}: {e}")
+                raise RuntimeError(f"Conversion error for {tile_name}: {e}") from e
 
 
 

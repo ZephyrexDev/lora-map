@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -37,3 +38,23 @@ def get_db(db_path: str | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
 
     return conn
+
+
+@contextmanager
+def db_connection(db_path: str | None = None):
+    """Context manager that yields a configured SQLite connection and closes it on exit.
+
+    Parameters
+    ----------
+    db_path:
+        Filesystem path to the database file.  Passed through to :func:`get_db`.
+
+    Yields
+    ------
+    sqlite3.Connection
+    """
+    conn = get_db(db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()

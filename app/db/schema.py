@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 from pathlib import Path
+
+from app.db.connection import db_connection
 
 logger = logging.getLogger(__name__)
 
@@ -57,15 +58,9 @@ def init_db(db_path: str | Path) -> None:
 
     logger.info("Initializing database at %s", db_path)
 
-    conn: sqlite3.Connection = sqlite3.connect(str(db_path))
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA foreign_keys=ON;")
-
+    with db_connection(str(db_path)) as conn:
         for schema in ALL_SCHEMAS:
             conn.executescript(schema)
 
         conn.commit()
         logger.info("Database schema applied successfully")
-    finally:
-        conn.close()
