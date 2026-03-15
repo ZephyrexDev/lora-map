@@ -6,12 +6,33 @@ ADMIN_PASSWORD environment variable itself.  When ADMIN_PASSWORD is not set
 """
 
 import os
+import time
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
 ADMIN_PASSWORD: str | None = os.environ.get("ADMIN_PASSWORD")
+
+# Simple in-memory rate limiter for login attempts
+_login_attempts: dict[str, list[float]] = {}
+_MAX_ATTEMPTS = 5
+_WINDOW_SECONDS = 60
+
+
+def _check_rate_limit(client_ip: str) -> None:
+    """Raise 429 if client_ip has exceeded _MAX_ATTEMPTS in the last _WINDOW_SECONDS."""
+    now = time.monotonic()
+    attempts = _login_attempts.get(client_ip, [])
+    # Prune old attempts
+    attempts = [t for t in attempts if now - t < _WINDOW_SECONDS]
+    _login_attempts[client_ip] = attempts
+
+    if len(attempts) >= _MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+    attempts.append(now)
+    _login_attempts[client_ip] = attempts
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -50,16 +71,18 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/login")
-async def login(body: LoginRequest) -> dict[str, str]:
+async def login(body: LoginRequest, request: Request) -> dict[str, str]:
     """Validate a password and return a token on success.
 
     Returns ``{"token": "<password>"}`` when the password matches
     ``ADMIN_PASSWORD``, or 401 otherwise.  If auth is disabled
     (``ADMIN_PASSWORD`` unset), any password is accepted and an empty token
-    is returned.
+    is returned.  Rate limited to 5 attempts per minute per IP.
     """
     if ADMIN_PASSWORD is None:
         return {"token": ""}
+
+    _check_rate_limit(request.client.host if request.client else "unknown")
 
     if body.password != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid password")

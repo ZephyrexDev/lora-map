@@ -16,8 +16,8 @@
 - [x] Remove nginx-proxy and acme-companion services from compose
 - [x] Remove Redis service from compose
 - [x] Rename `docker-compose.yml` → `compose.yml` with single `app` service + persistent volume
-- [ ] Update Containerfile to not install/configure Redis
-- [ ] Add `/data` volume mount for SQLite + terrain cache
+- [x] Update Containerfile to not install/configure Redis (N/A — Redis was never in Containerfile)
+- [x] Add `/data` volume mount for SQLite + terrain cache (already in compose.yml)
 - [x] Replace all `docker` references in code/comments with `podman` (N/A — no docker refs outside renamed files)
 - [ ] Test `podman build` and `podman run` workflow end-to-end
 
@@ -39,7 +39,7 @@
 
 - [x] Remove `CORSMiddleware` from `main.py`
 - [x] Remove CORS-related imports and comments
-- [ ] Ensure static files still served via `StaticFiles` mount on `/`
+- [x] Ensure static files still served via `StaticFiles` mount on `/`
 - [ ] Verify API and UI work on same origin behind reverse proxy
 
 ## 5. Persistent towers & toggleable layers
@@ -53,10 +53,10 @@
 
 ## 6. Admin/visitor auth
 
-- [ ] Define admin credential source (environment variable: `ADMIN_PASSWORD` or similar)
-- [ ] Add FastAPI auth dependency (e.g., HTTP Basic or token-based)
-- [ ] Protect `POST /predict`, `DELETE /towers/{id}`, and any future mutation endpoints
-- [ ] Leave `GET /towers`, `GET /status`, `GET /result` public
+- [x] Define admin credential source (environment variable: `ADMIN_PASSWORD`, rate-limited login)
+- [x] Add FastAPI auth dependency (Bearer token = static password)
+- [x] Protect `POST /predict`, `DELETE /towers/{id}`, and any future mutation endpoints
+- [x] Leave `GET /towers`, `GET /status`, `GET /result` public
 - [ ] Add login UI for admin (minimal — just unlocks edit controls)
 - [ ] Visitor mode: hide simulation form, show only map + tower list with toggles
 
@@ -65,9 +65,9 @@
 - [x] Create `src/presets/hardware.ts` with Heltec V3 (max 22 dBm / 158 mW, SX1262), Heltec V4 (max 22 dBm / 158 mW, SX1262), custom (all fields unlocked)
 - [x] Create `src/presets/frequencies.ts` keyed by country code (Canada 907 MHz, US 915 MHz, EU 868 MHz, etc.)
 - [x] Create `src/presets/antennas.ts` with curated antenna list (name, gain dBi, SWR): Ribbed Spring Helical (0 dBi, 3.0), Duck Stubby (1 dBi, 3.5), Bingfu Whip (2.5 dBi, 1.8), Slinkdsco Omni (4 dBi, 1.1)
-- [ ] Calculate SWR mismatch loss: `loss_dB = -10 * log10(1 - ((SWR-1)/(SWR+1))²)` and subtract from TX power before sending to SPLAT!
-- [ ] Add SWR mismatch loss calculation to backend `app/services/splat.py` (apply to effective TX power)
-- [ ] Display computed mismatch loss in UI next to antenna selector (informational)
+- [x] Calculate SWR mismatch loss: `loss_dB = -10 * log10(1 - ((SWR-1)/(SWR+1))²)` and subtract from TX power before sending to SPLAT!
+- [x] Add SWR mismatch loss calculation to backend `app/services/splat.py` (apply to effective TX power)
+- [x] Display computed mismatch loss in UI next to antenna selector (informational)
 - [x] Create `src/presets/heights.ts` mapping labels to meters (ground: 1m, first floor window: 3m, second floor window: 6m, gutter line: 8m, rooftop: 10m, ground tower: 30m, roof tower: 15m)
 - [x] Add hardware selector dropdown to transmitter form
 - [x] Add country/region selector that auto-fills frequency
