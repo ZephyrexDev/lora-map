@@ -87,3 +87,31 @@
 - [ ] 45. Admin auth flow test — login form → token → protected endpoints accessible, bad creds rejected
 - [ ] 46. API integration tests — tower CRUD, tower-paths list, matrix config round-trip
 - [ ] 47. Add `test:e2e` script to `package.json` and `test-e2e` CI job gated behind unit tests
+
+---
+
+## Round 4 — Frontend Deep Review (2026-03-15)
+
+### Critical
+
+- [ ] 48. Map init coupled to `Transmitter.vue` — visitors never get a map since it's inside `v-if="store.isAdmin"` (`Transmitter.vue:368`)
+- [ ] 49. `v-model` on numeric inputs produces strings — no `.number` modifier, causes NaN in calculations (all form components)
+
+### High
+
+- [ ] 50. HTML injection in tower path popups — backend values interpolated into HTML string (`store.ts:220`)
+- [ ] 51. HTML injection in deadzone suggestion icon — `priority_rank` interpolated into `L.divIcon({ html })` (`store.ts:281-294`)
+- [ ] 52. `overlay_transparency` slider is non-functional — value collected but never applied to rendering (`store.ts:89,491,531`)
+- [ ] 53. Tower color picker ignored — `runSimulation` always uses palette color, discards `tx_color` (`store.ts:674-680`)
+
+### Medium
+
+- [ ] 54. `simulationState` is untyped string — no union type, typos compile silently (`store.ts:37`)
+- [ ] 55. `await randanimalSync()` — `await` on sync function is misleading (`store.ts:682`)
+- [ ] 56. `updateOverlapLayer` ↔ `redrawSites` redundant redraws — mutual calls cause double work (`store.ts:499-538`)
+- [ ] 57. `_prefillCoords` reactive store state used as one-shot event — fragile signaling pattern (`store.ts:53`)
+
+### Low
+
+- [ ] 58. No error feedback to visitors on `loadTowers` failure — silent `console.warn` only (`store.ts:96-161`)
+- [ ] 59. Reactive destructuring of store nested objects is fragile (`Transmitter.vue:249`, `Display.vue:116`)
