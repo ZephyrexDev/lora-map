@@ -44,12 +44,34 @@ class DeadzoneAnalyzer:
         if len(geotiff_blobs) < 2:
             raise ValueError("Deadzone analysis requires at least 2 tower simulations")
         self.geotiff_blobs = geotiff_blobs
+        self._memory_files: list[rasterio.MemoryFile] = []
+
+    def _cleanup_rasters(self, rasters: list[rasterio.DatasetReader]) -> None:
+        """Close all open dataset readers and their backing MemoryFile objects."""
+        for reader in rasters:
+            try:
+                reader.close()
+            except Exception:
+                pass
+        for mem_file in self._memory_files:
+            try:
+                mem_file.close()
+            except Exception:
+                pass
+        self._memory_files.clear()
 
     def analyze(self) -> DeadzoneAnalysisResponse:
         """Run the full deadzone analysis pipeline and return results."""
         logger.info("Starting deadzone analysis with %d towers", len(self.geotiff_blobs))
 
         rasters = self._open_rasters()
+        try:
+            return self._run_analysis(rasters)
+        finally:
+            self._cleanup_rasters(rasters)
+
+    def _run_analysis(self, rasters: list[rasterio.DatasetReader]) -> DeadzoneAnalysisResponse:
+        """Core analysis logic, separated so callers can guarantee cleanup."""
         bounds = self._compute_union_bounds(rasters)
         merged, transform, pixel_area_km2 = self._merge_to_common_grid(rasters, bounds)
 
@@ -97,11 +119,23 @@ class DeadzoneAnalyzer:
         )
 
     def _open_rasters(self) -> list[rasterio.DatasetReader]:
-        """Open all GeoTIFF blobs as rasterio dataset readers."""
-        readers = []
-        for blob in self.geotiff_blobs:
-            mem_file = rasterio.MemoryFile(blob)
-            readers.append(mem_file.open())
+        """Open all GeoTIFF blobs as rasterio dataset readers.
+
+        MemoryFile references are stored in ``self._memory_files`` so they can
+        be closed later via ``_cleanup_rasters``.
+
+        If opening fails partway through, already-opened readers and
+        MemoryFile objects are cleaned up before the exception propagates.
+        """
+        readers: list[rasterio.DatasetReader] = []
+        try:
+            for blob in self.geotiff_blobs:
+                mem_file = rasterio.MemoryFile(blob)
+                self._memory_files.append(mem_file)
+                readers.append(mem_file.open())
+        except Exception:
+            self._cleanup_rasters(readers)
+            raise
         return readers
 
     @staticmethod
@@ -201,6 +235,7 @@ class DeadzoneAnalyzer:
         coverage_edge = binary_dilation(coverage_mask, iterations=3) & ~coverage_mask
 
         regions: list[DeadzoneRegionResponse] = []
+        edge_fractions: dict[int, float] = {}
         max_area = 0.0
 
         for region_id in range(1, num_features + 1):
@@ -223,6 +258,8 @@ class DeadzoneAnalyzer:
             if area_km2 > max_area:
                 max_area = area_km2
 
+            edge_fractions[region_id] = edge_fraction
+
             # Compute centroid in pixel coords and convert to lat/lon
             centroid = center_of_mass(region_mask)
             row, col = centroid[0], centroid[1]
@@ -242,9 +279,7 @@ class DeadzoneAnalyzer:
         # Compute priority scores: weighted combination of area and edge proximity
         if max_area > 0 and regions:
             for region in regions:
-                region_mask = labeled_array == region.region_id
-                edge_overlap = int(np.sum(region_mask & coverage_edge))
-                edge_fraction = edge_overlap / region.pixel_count if region.pixel_count > 0 else 0.0
+                edge_fraction = edge_fractions[region.region_id]
 
                 area_score = min(region.area_km2 / max_area, 1.0)
                 proximity_score = min(edge_fraction * 5.0, 1.0)  # scale up since edge fractions are small

@@ -18,6 +18,7 @@ import io
 import json
 import logging
 import os
+import sqlite3
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -41,6 +42,7 @@ from app.matrix import (
 )
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.models.DeadzoneResponse import DeadzoneAnalysisResponse
+from app.models.TowerPathsRequest import TowerPathsRequest
 from app.services.aggregate import compute_weighted_aggregate
 from app.services.deadzone import DeadzoneAnalyzer
 from app.services.splat import Splat
@@ -212,6 +214,9 @@ async def predict(
 
         conn.commit()
 
+    # Invalidate deadzone cache since tower set changed
+    _deadzone_cache["result"] = None
+
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
     background_tasks.add_task(run_matrix_simulations, tower_id, payload)
 
@@ -336,6 +341,9 @@ async def delete_tower(tower_id: str) -> JSONResponse:
 
     if cursor.rowcount == 0:
         return JSONResponse({"error": "Tower not found"}, status_code=404)
+
+    # Invalidate deadzone cache since tower set changed
+    _deadzone_cache["result"] = None
 
     logger.info("Tower %s deleted.", tower_id)
     return JSONResponse({"message": "Tower deleted", "tower_id": tower_id})
@@ -552,7 +560,7 @@ async def put_matrix_config_endpoint(
 # ---------------------------------------------------------------------------
 
 
-def _get_tower_location(conn, tower_id: str) -> dict[str, Any] | None:
+def _get_tower_location(conn: sqlite3.Connection, tower_id: str) -> dict[str, Any] | None:
     """Return lat, lon, and tx_height for a tower, or None if not found."""
     row = conn.execute("SELECT params FROM towers WHERE id = ?", (tower_id,)).fetchone()
     if row is None:
@@ -611,7 +619,7 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
 @app.post("/tower-paths", dependencies=[Depends(require_admin)])
 async def compute_tower_paths(
     background_tasks: BackgroundTasks,
-    body: dict[str, Any] | None = None,
+    body: TowerPathsRequest | None = None,
 ) -> JSONResponse:
     """Compute pairwise P2P paths between towers.
 
@@ -621,8 +629,8 @@ async def compute_tower_paths(
     Existing paths between the selected towers are replaced.
     """
     with db_connection() as conn:
-        if body and "tower_ids" in body:
-            tower_ids: list[str] = body["tower_ids"]
+        if body and body.tower_ids:
+            tower_ids: list[str] = body.tower_ids
         else:
             rows = conn.execute("SELECT id FROM towers").fetchall()
             tower_ids = [r["id"] for r in rows]
@@ -710,9 +718,17 @@ async def delete_tower_path(path_id: str) -> JSONResponse:
 # Deadzone analysis endpoint
 # ---------------------------------------------------------------------------
 
+# Simple in-memory cache for deadzone analysis results.  The cache is
+# invalidated whenever the tower count changes (a rough proxy for "towers
+# have changed").  This avoids re-running the expensive analysis on every
+# request while remaining correct enough for typical usage patterns.
+# TODO: Integrate proper cache invalidation when towers are created/deleted,
+#       and consider adding rate-limiting similar to the auth endpoints.
+_deadzone_cache: dict[str, Any] = {"tower_count": 0, "result": None}
+
 
 @app.get("/deadzones", response_model=DeadzoneAnalysisResponse)
-async def get_deadzones():
+async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
     """Analyze coverage gaps across all completed tower simulations.
 
     Requires at least 2 towers with completed GeoTIFF data. Merges their results
@@ -732,9 +748,16 @@ async def get_deadzones():
             status_code=400,
         )
 
+    # Return cached result if the tower count hasn't changed
+    if _deadzone_cache["result"] is not None and _deadzone_cache["tower_count"] == len(geotiff_blobs):
+        return _deadzone_cache["result"]
+
     try:
         analyzer = DeadzoneAnalyzer(geotiff_blobs)
-        return analyzer.analyze()
+        result = analyzer.analyze()
+        _deadzone_cache["tower_count"] = len(geotiff_blobs)
+        _deadzone_cache["result"] = result
+        return result
     except Exception as e:
         logger.error("Deadzone analysis failed: %s", e)
         return JSONResponse({"error": f"Deadzone analysis failed: {e!s}"}, status_code=500)

@@ -71,9 +71,7 @@ const antennaOptions = [
   { key: "slinkdsco_omni", label: "Slinkdsco Omni" },
 ];
 
-const terrainOptions = [
-  { key: "bare_earth", label: "Bare Earth" },
-];
+const terrainOptions = [{ key: "bare_earth", label: "Bare Earth" }];
 
 const config = reactive<MatrixConfig>({
   hardware: { v3: true, v4: true },
@@ -124,9 +122,15 @@ async function toggle(section: keyof MatrixConfig, key: string) {
         Authorization: `Bearer ${store.adminToken}`,
       },
       body: JSON.stringify({
-        hardware: Object.entries(config.hardware).filter(([, v]) => v).map(([k]) => k),
-        antennas: Object.entries(config.antennas).filter(([, v]) => v).map(([k]) => k),
-        terrain: Object.entries(config.terrain).filter(([, v]) => v).map(([k]) => k),
+        hardware: Object.entries(config.hardware)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+        antennas: Object.entries(config.antennas)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+        terrain: Object.entries(config.terrain)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
       }),
     });
     if (response.ok) {

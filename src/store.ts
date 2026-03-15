@@ -23,10 +23,9 @@ import { DeadzoneCanvasLayer } from "./deadzoneLayer.ts";
  */
 function pathLossColor(pathLossDb: number, hasLos: boolean | null): string {
   if (hasLos === false) return "#e74c3c"; // red for NLOS
-  if (pathLossDb < 100) return "#2ecc71";
-  if (pathLossDb < 120) return "#f1c40f";
-  if (pathLossDb < 140) return "#e67e22";
-  return "#e74c3c";
+  if (pathLossDb < 100) return "#2ecc71"; // green – good
+  if (pathLossDb <= 130) return "#f1c40f"; // yellow – marginal
+  return "#e74c3c"; // red – poor
 }
 
 // Default tower colors for visual differentiation
@@ -166,9 +165,20 @@ const useStore = defineStore("store", {
         this.towerPathLayers.push(polyline);
       }
     },
+    clearTowerPaths(): void {
+      if (!this.map) return;
+      for (const layer of this.towerPathLayers) {
+        this.map.removeLayer(layer);
+      }
+      this.towerPathLayers = [];
+    },
     toggleTowerPaths(): void {
       this.showTowerPaths = !this.showTowerPaths;
-      this.renderTowerPaths();
+      if (this.showTowerPaths) {
+        this.renderTowerPaths();
+      } else {
+        this.clearTowerPaths();
+      }
     },
     async fetchDeadzones(): Promise<void> {
       if (this.localSites.length < 2) {
@@ -250,7 +260,7 @@ const useStore = defineStore("store", {
     },
     _clearDeadzoneOverlay(): void {
       if (this.deadzoneLayer && this.map) {
-        this.map.removeLayer(this.deadzoneLayer as unknown as L.Layer);
+        this.map.removeLayer(this.deadzoneLayer as L.Layer);
         this.deadzoneLayer = null;
       }
       for (const marker of this.suggestionMarkers) {
@@ -341,6 +351,9 @@ const useStore = defineStore("store", {
       if (this.showDeadzones) {
         this.fetchDeadzones();
       }
+      if (this.showTowerPaths) {
+        this.loadTowerPaths();
+      }
     },
     toggleSiteVisibility(index: number) {
       if (index < 0 || index >= this.localSites.length) return;
@@ -368,7 +381,7 @@ const useStore = defineStore("store", {
       this.localSites.forEach((site: Site) => {
         if (!site.visible) return;
         const rasterLayer = new GeoRasterLayer({
-          georaster: { ...site }.raster,
+          georaster: site.raster,
           opacity: overlapActive ? 0 : 0.7,
           noDataValue: 255,
           resolution: 256,
@@ -529,11 +542,16 @@ const useStore = defineStore("store", {
         this.simulationState = "running";
 
         // Send the request to the backend's /predict endpoint
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (this.adminToken) {
+          headers["Authorization"] = `Bearer ${this.adminToken}`;
+        }
+
         const predictResponse = await fetch("/predict", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify(payload),
         });
 

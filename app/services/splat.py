@@ -921,14 +921,14 @@ class Splat:
                         f"Stdout: {result.stdout}\nStderr: {result.stderr}"
                     )
 
-                return Splat._parse_p2p_output(result.stdout, approx_distance_km)
+                return Splat._parse_p2p_output(result.stdout, approx_distance_km, frequency_mhz)
 
             except Exception as e:
                 logger.error("Error during P2P analysis: %s", e)
                 raise RuntimeError(f"Error during P2P analysis: {e}") from e
 
     @staticmethod
-    def _parse_p2p_output(stdout: str, fallback_distance_km: float) -> PointToPointResult:
+    def _parse_p2p_output(stdout: str, fallback_distance_km: float, frequency_mhz: float) -> PointToPointResult:
         """Parse SPLAT! point-to-point text output for path loss and LOS.
 
         SPLAT! P2P mode prints a text report containing lines like:
@@ -941,6 +941,7 @@ class Splat:
         Args:
             stdout: The full stdout text from SPLAT! P2P execution.
             fallback_distance_km: Haversine distance used if parsing fails.
+            frequency_mhz: Operating frequency in MHz for FSPL fallback calculation.
 
         Returns:
             PointToPointResult with extracted values.
@@ -976,7 +977,7 @@ class Splat:
         if path_loss_db is None:
             logger.warning("Could not parse path loss from SPLAT! output, using free-space estimate.")
             # Free-space path loss: FSPL(dB) = 20*log10(d_km) + 20*log10(f_MHz) + 32.44
-            path_loss_db = (20 * math.log10(distance_km) + 20 * math.log10(905.0) + 32.44) if distance_km > 0 else 0.0
+            path_loss_db = (20 * math.log10(distance_km) + 20 * math.log10(frequency_mhz) + 32.44) if distance_km > 0 else 0.0
 
         return PointToPointResult(
             path_loss_db=path_loss_db,

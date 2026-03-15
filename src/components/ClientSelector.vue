@@ -9,11 +9,7 @@
           class="form-select form-select-sm"
           @change="onSelectionChange"
         >
-          <option
-            v-for="hw in enabledHardware"
-            :key="hw.key"
-            :value="hw.key"
-          >
+          <option v-for="hw in enabledHardware" :key="hw.key" :value="hw.key">
             {{ hw.label }}
           </option>
         </select>
@@ -26,11 +22,7 @@
           class="form-select form-select-sm"
           @change="onSelectionChange"
         >
-          <option
-            v-for="ant in enabledAntennas"
-            :key="ant.key"
-            :value="ant.key"
-          >
+          <option v-for="ant in enabledAntennas" :key="ant.key" :value="ant.key">
             {{ ant.label }}
           </option>
         </select>
@@ -100,9 +92,7 @@ async function onSelectionChange() {
       // Find the simulation matching current hardware + antenna + bare_earth terrain
       const match = simulations.find(
         (sim: any) =>
-          sim.hardware === store.clientHardware &&
-          sim.antenna === store.clientAntenna &&
-          sim.terrain === "bare_earth",
+          sim.hardware === store.clientHardware && sim.antenna === store.clientAntenna && sim.terrain === "bare_earth",
       );
 
       if (match) {

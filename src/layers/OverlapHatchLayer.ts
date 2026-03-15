@@ -1,16 +1,16 @@
-import L from 'leaflet';
-import { hexToRgb } from '../utils.ts';
-import { type TowerInfo } from '../types.ts';
+import L from "leaflet";
+import { hexToRgb } from "../utils.ts";
+import { type TowerInfo } from "../types.ts";
 
 // Pre-defined stripe angles in radians for each tower index
 const STRIPE_ANGLES = [
-  Math.PI / 4,       // 45 degrees
+  Math.PI / 4, // 45 degrees
   (3 * Math.PI) / 4, // 135 degrees
-  Math.PI / 6,       // 30 degrees
+  Math.PI / 6, // 30 degrees
   (2 * Math.PI) / 3, // 120 degrees
-  Math.PI / 3,       // 60 degrees
+  Math.PI / 3, // 60 degrees
   (5 * Math.PI) / 6, // 150 degrees
-  Math.PI / 12,      // 15 degrees
+  Math.PI / 12, // 15 degrees
   (11 * Math.PI) / 12, // 165 degrees
 ];
 
@@ -22,7 +22,7 @@ const STRIPE_PERIOD = 12;
 
 interface OverlapHatchLayerOptions extends L.GridLayerOptions {
   towers: TowerInfo[];
-  mode: 'hatch' | 'blend';
+  mode: "hatch" | "blend";
   minDbm: number;
   maxDbm: number;
 }
@@ -77,19 +77,19 @@ const OverlapHatchLayer = L.GridLayer.extend({
     L.Util.setOptions(this, options);
     // Pre-parse tower colors
     const opts = this.options as OverlapHatchLayerOptions;
-    this._parsedColors = opts.towers.map(t => {
+    this._parsedColors = opts.towers.map((t) => {
       const { r, g, b } = hexToRgb(t.color);
       return [r, g, b] as [number, number, number];
     });
   },
 
   createTile(coords: L.Coords): HTMLCanvasElement {
-    const tile = document.createElement('canvas');
+    const tile = document.createElement("canvas");
     const tileSize = this.getTileSize();
     tile.width = tileSize.x;
     tile.height = tileSize.y;
 
-    const ctx = tile.getContext('2d');
+    const ctx = tile.getContext("2d");
     if (!ctx) return tile;
 
     const opts = this.options as OverlapHatchLayerOptions;
@@ -151,10 +151,12 @@ const OverlapHatchLayer = L.GridLayer.extend({
               break;
             }
           }
-        } else if (mode === 'blend') {
+        } else if (mode === "blend") {
           // Alpha blend mode: average colors weighted by signal strength
           let totalWeight = 0;
-          let rSum = 0, gSum = 0, bSum = 0;
+          let rSum = 0,
+            gSum = 0,
+            bSum = 0;
           let maxAlpha = 0;
 
           for (let t = 0; t < towers.length; t++) {
