@@ -218,6 +218,6 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers
 - [x] Store path results (path loss, LOS status) in SQLite `tower_paths` table
 - [x] Add `GET /tower-paths` endpoint returning all computed paths
-- [ ] Render paths as Leaflet polylines between tower markers (color-coded by path quality)
-- [ ] Add toggle to show/hide mesh path overlay independently from coverage layers
+- [x] Render paths as Leaflet polylines between tower markers (color-coded by path quality)
+- [x] Add toggle to show/hide mesh path overlay independently from coverage layers
 - [x] Recalculate affected paths when a tower is added or removed
