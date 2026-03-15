@@ -238,6 +238,13 @@ A fourth virtual terrain model that blends the three real models into a single c
 ### Dead code
 - [x] `Splat.bucket_name` and `Splat.bucket_prefix` stored on instance but unused after terrain provider extraction — remove
 
+### Pydantic response models & type safety (round 2)
+- [x] `_run_simulation_task` uses lowercase `callable` — use `Callable` from `collections.abc`
+- [x] `_get_tower_location` returns untyped `dict[str, Any]` — replace with `TowerLocation` Pydantic model
+- [x] API responses built as inline dicts — add `PredictResponse`, `TowerResponse`, `TowerListResponse`, `SimulationResponse`, `SimulationListResponse`, `TowerPathResponse`, `TowerPathListResponse`, `DeleteResponse`, `TaskStatusResponse`, `AuthTokenResponse`, `AuthCheckResponse`
+- [x] `get_matrix_config` / `set_matrix_config` use `dict[str, list[str]]` — use `MatrixConfigRequest` model
+- [x] `_KNOWN_HARDWARE` / `_KNOWN_ANTENNAS` duplicate keys from `HARDWARE_RX_PARAMS` / `ANTENNA_RX_PARAMS` — derive from source data
+
 ## 16. Mobile / responsive design
 
 ### Critical
@@ -278,3 +285,16 @@ A fourth virtual terrain model that blends the three real models into a single c
 
 ### Round 3 — Minor
 - [x] Increase offcanvas close button touch target for mobile — added `p-3` padding
+
+## 17. Backend–frontend integration gaps
+
+### Critical bugs
+- [x] ClientSelector uses wrong field names — fixed to use `client_hardware`, `client_antenna`, `terrain_model`, `id`
+- [x] Tower deletion (`removeSite`) now calls `DELETE /towers/{tower_id}` before local removal
+- [x] `GET /towers` called on page load via `loadTowers()` in `initMap` — persisted towers load for all users
+
+### Feature gaps
+- [x] MatrixConfig lists all 3 real terrain models (`bare_earth`, `dsm`, `lulc_clutter`)
+- [x] ClientSelector has terrain model selector — visitors can switch between terrain modes
+- [x] Failed simulation error message surfaced in UI alert below Run Simulation button
+- [x] `GET /towers/{tower_id}/aggregate` called when visitor selects `weighted_aggregate` terrain

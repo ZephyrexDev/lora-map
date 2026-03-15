@@ -71,7 +71,11 @@ const antennaOptions = [
   { key: "slinkdsco_omni", label: "Slinkdsco Omni" },
 ];
 
-const terrainOptions = [{ key: "bare_earth", label: "Bare Earth" }];
+const terrainOptions = [
+  { key: "bare_earth", label: "Bare Earth (SRTM)" },
+  { key: "dsm", label: "Digital Surface Model" },
+  { key: "lulc_clutter", label: "LULC Clutter" },
+];
 
 const config = reactive<MatrixConfig>({
   hardware: { v3: true, v4: true },

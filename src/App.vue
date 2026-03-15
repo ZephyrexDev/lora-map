@@ -168,22 +168,30 @@
                   </ul>
                 </li>
               </ul>
-              <div class="mt-3 d-flex gap-2 sticky-bottom bg-dark py-2" style="z-index: 1">
-                <button
-                  id="runSimulation"
-                  :disabled="store.simulationState === 'running'"
-                  type="button"
-                  class="btn btn-success btn-sm"
-                  @click="store.runSimulation"
+              <div class="mt-3 sticky-bottom bg-dark py-2" style="z-index: 1">
+                <div class="d-flex gap-2">
+                  <button
+                    id="runSimulation"
+                    :disabled="store.simulationState === 'running'"
+                    type="button"
+                    class="btn btn-success btn-sm"
+                    @click="store.runSimulation"
+                  >
+                    <span
+                      :class="{ 'd-none': store.simulationState !== 'running' }"
+                      class="spinner-border spinner-border-sm"
+                      role="status"
+                      aria-hidden="true"
+                    ></span>
+                    <span class="button-text">{{ buttonText() }}</span>
+                  </button>
+                </div>
+                <div
+                  v-if="store.simulationState === 'failed' && store.simulationError"
+                  class="alert alert-danger py-1 px-2 mt-2 mb-0 small"
                 >
-                  <span
-                    :class="{ 'd-none': store.simulationState !== 'running' }"
-                    class="spinner-border spinner-border-sm"
-                    role="status"
-                    aria-hidden="true"
-                  ></span>
-                  <span class="button-text">{{ buttonText() }}</span>
-                </button>
+                  {{ store.simulationError }}
+                </div>
               </div>
               <h6 class="text-light mt-4 mb-2">Client View</h6>
               <ClientSelector />

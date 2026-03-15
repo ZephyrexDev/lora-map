@@ -52,10 +52,12 @@ const useStore = defineStore("store", {
       localSites: [] as Site[],
       overlapLayer: undefined as undefined | L.GridLayer,
       simulationState: "idle",
+      simulationError: "" as string,
       isAdmin: false,
       adminToken: localStorage.getItem("adminToken") || "",
       clientHardware: "v3" as string,
       clientAntenna: "bingfu_whip" as string,
+      clientTerrain: "bare_earth" as string,
       towerPaths: [] as TowerPath[],
       towerPathLayers: [] as L.Polyline[],
       showTowerPaths: true,
@@ -105,6 +107,67 @@ const useStore = defineStore("store", {
     };
   },
   actions: {
+    async loadTowers(): Promise<void> {
+      try {
+        const response = await fetch("/towers");
+        if (!response.ok) return;
+        const data = await response.json();
+        const towers: { id: string; name: string; color: string | null; params: Record<string, unknown> }[] =
+          data.towers ?? [];
+
+        for (const tower of towers) {
+          // Skip if already loaded locally
+          if (this.localSites.find((s: Site) => s.taskId === tower.id)) continue;
+
+          // Find the default simulation result (first completed bare_earth sim)
+          try {
+            const simResponse = await fetch(`/towers/${tower.id}/simulations?enabled_only=true`);
+            if (!simResponse.ok) continue;
+            const simData = await simResponse.json();
+            const sims: {
+              id: string;
+              client_hardware: string;
+              client_antenna: string;
+              terrain_model: string;
+              status: string;
+            }[] = simData.simulations ?? [];
+            const completedSim =
+              sims.find(
+                (s) =>
+                  s.status === "completed" &&
+                  s.client_hardware === this.clientHardware &&
+                  s.client_antenna === this.clientAntenna &&
+                  s.terrain_model === "bare_earth",
+              ) ?? sims.find((s) => s.status === "completed");
+
+            if (!completedSim) continue;
+
+            const resultResponse = await fetch(`/simulations/${completedSim.id}/result`);
+            if (!resultResponse.ok) continue;
+            const arrayBuffer = await resultResponse.arrayBuffer();
+            const geoRaster = await parseGeoraster(arrayBuffer);
+
+            const colorIndex = this.localSites.length % TOWER_COLORS.length;
+            this.localSites.push({
+              params: tower.params as unknown as SplatParams,
+              taskId: tower.id,
+              raster: geoRaster,
+              color: tower.color || TOWER_COLORS[colorIndex],
+              visible: true,
+            });
+          } catch (err) {
+            console.warn("Error loading simulation for tower:", tower.id, err);
+          }
+        }
+
+        if (this.localSites.length > 0) {
+          this.redrawSites();
+          this.updateOverlapLayer();
+        }
+      } catch (err) {
+        console.warn("Error loading towers:", err);
+      }
+    },
     async loadMatrixConfig(): Promise<void> {
       try {
         const response = await fetch("/matrix/config");
@@ -319,27 +382,46 @@ const useStore = defineStore("store", {
           return;
         }
         const arrayBuffer = await resultResponse.arrayBuffer();
-        const geoRaster = await parseGeoraster(arrayBuffer);
-        const site = this.localSites.find((s: Site) => s.taskId === towerId);
-        if (!site) {
-          console.warn("No site found for tower:", towerId);
-          return;
-        }
-        site.raster = geoRaster;
-        this.redrawSites();
-        this.updateOverlapLayer();
+        await this.swapSimulationLayerFromBuffer(towerId, arrayBuffer);
       } catch (err) {
         console.warn("Error swapping simulation layer:", err);
       }
+    },
+    async swapSimulationLayerFromBuffer(towerId: string, arrayBuffer: ArrayBuffer): Promise<void> {
+      const geoRaster = await parseGeoraster(arrayBuffer);
+      const site = this.localSites.find((s: Site) => s.taskId === towerId);
+      if (!site) {
+        console.warn("No site found for tower:", towerId);
+        return;
+      }
+      site.raster = geoRaster;
+      this.redrawSites();
+      this.updateOverlapLayer();
     },
     setTxCoords(lat: number, lon: number) {
       this.splatParams.transmitter.tx_lat = lat;
       this.splatParams.transmitter.tx_lon = lon;
     },
-    removeSite(index: number) {
-      if (!this.map) {
-        return;
+    async removeSite(index: number) {
+      if (!this.map) return;
+      const site = this.localSites[index];
+      if (!site) return;
+
+      // Delete from backend if we have admin credentials and a tower ID
+      if (this.adminToken && site.taskId) {
+        try {
+          const response = await fetch(`/towers/${site.taskId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${this.adminToken}` },
+          });
+          if (!response.ok) {
+            console.warn("Failed to delete tower from backend:", response.statusText);
+          }
+        } catch (err) {
+          console.warn("Error deleting tower:", err);
+        }
       }
+
       this.localSites.splice(index, 1);
       this.map.eachLayer((layer: L.Layer) => {
         if (layer instanceof GeoRasterLayer) {
@@ -499,6 +581,7 @@ const useStore = defineStore("store", {
         .addTo(this.map as L.Map)
         .bindPopup("Transmitter site");
       this.redrawSites();
+      this.loadTowers();
       this.loadTowerPaths();
     },
     async runSimulation() {
@@ -540,6 +623,7 @@ const useStore = defineStore("store", {
         };
 
         this.simulationState = "running";
+        this.simulationError = "";
 
         // Send the request to the backend's /predict endpoint
         const headers: Record<string, string> = {
@@ -604,6 +688,9 @@ const useStore = defineStore("store", {
             }
           } else if (statusData.status === "failed") {
             this.simulationState = "failed";
+            const errorMsg = statusData.error || "Unknown error";
+            console.error("Simulation failed:", errorMsg);
+            this.simulationError = errorMsg;
           } else {
             setTimeout(pollStatus, pollInterval); // Retry after interval
           }
