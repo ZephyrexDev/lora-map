@@ -217,7 +217,19 @@ const useStore = defineStore("store", {
           losText = path.has_los ? "Yes" : "No";
         }
         const distText = path.distance_km !== null ? `${path.distance_km.toFixed(1)} km` : "pending";
-        polyline.bindPopup(`<b>Path Loss:</b> ${lossText}<br><b>LOS:</b> ${losText}<br><b>Distance:</b> ${distText}`);
+
+        const popupEl = document.createElement("div");
+        const addLine = (label: string, value: string) => {
+          const b = document.createElement("b");
+          b.textContent = `${label}: `;
+          popupEl.appendChild(b);
+          popupEl.appendChild(document.createTextNode(value));
+          popupEl.appendChild(document.createElement("br"));
+        };
+        addLine("Path Loss", lossText);
+        addLine("LOS", losText);
+        addLine("Distance", distText);
+        polyline.bindPopup(popupEl);
 
         polyline.addTo(this.map);
         this.towerPathLayers.push(polyline);
@@ -277,21 +289,12 @@ const useStore = defineStore("store", {
       this.deadzoneLayer = layer;
 
       for (const suggestion of this.deadzoneAnalysis.suggestions) {
+        const iconEl = document.createElement("div");
+        iconEl.style.cssText =
+          "background:#0d6efd;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.4)";
+        iconEl.textContent = String(suggestion.priority_rank);
         const icon = L.divIcon({
-          html: `<div style="
-            background: #0d6efd;
-            color: white;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: bold;
-            border: 2px solid white;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
-          ">${suggestion.priority_rank}</div>`,
+          html: iconEl.outerHTML,
           iconSize: [24, 24],
           iconAnchor: [12, 12],
           className: "",
@@ -316,14 +319,16 @@ const useStore = defineStore("store", {
         hr.style.margin = "4px 0";
         popupEl.appendChild(hr);
 
-        const coverage = document.createElement("span");
-        coverage.innerHTML = `<b>Est. coverage:</b> ${suggestion.estimated_coverage_km2.toFixed(1)} km&sup2;`;
-        popupEl.appendChild(coverage);
+        const coverageLabel = document.createElement("b");
+        coverageLabel.textContent = "Est. coverage: ";
+        popupEl.appendChild(coverageLabel);
+        popupEl.appendChild(document.createTextNode(`${suggestion.estimated_coverage_km2.toFixed(1)} km\u00B2`));
         popupEl.appendChild(document.createElement("br"));
 
-        const location = document.createElement("span");
-        location.innerHTML = `<b>Location:</b> ${suggestion.lat.toFixed(4)}, ${suggestion.lon.toFixed(4)}`;
-        popupEl.appendChild(location);
+        const locationLabel = document.createElement("b");
+        locationLabel.textContent = "Location: ";
+        popupEl.appendChild(locationLabel);
+        popupEl.appendChild(document.createTextNode(`${suggestion.lat.toFixed(4)}, ${suggestion.lon.toFixed(4)}`));
         popupEl.appendChild(document.createElement("br"));
 
         const btn = document.createElement("button");
