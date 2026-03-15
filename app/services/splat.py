@@ -632,9 +632,24 @@ class Splat:
 
             logger.debug("Extracted bounding box: north=%s, south=%s, east=%s, west=%s", north, south, east, west)
 
-            # Read PPM content as RGB (not grayscale — we need colors for reverse mapping)
+            # Read PPM content as RGB (not grayscale — we need colors for reverse mapping).
+            # Downsample if the image exceeds _MAX_PPM_DIM to avoid memory spikes
+            # on large-radius simulations (100 km → ~10000x10000 pixels).
+            _MAX_PPM_DIM = 4000
             logger.debug("Reading PPM content as RGB.")
             with Image.open(io.BytesIO(ppm_bytes)) as img:
+                if img.width > _MAX_PPM_DIM or img.height > _MAX_PPM_DIM:
+                    scale = _MAX_PPM_DIM / max(img.width, img.height)
+                    new_w = int(img.width * scale)
+                    new_h = int(img.height * scale)
+                    logger.info(
+                        "Downsampling PPM from %dx%d to %dx%d to limit memory usage.",
+                        img.width,
+                        img.height,
+                        new_w,
+                        new_h,
+                    )
+                    img = img.resize((new_w, new_h), Image.NEAREST)
                 img_rgb = np.array(img.convert("RGB"))  # (H, W, 3) uint8
 
             logger.debug("PPM image dimensions: %s", img_rgb.shape)
