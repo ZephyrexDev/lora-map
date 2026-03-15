@@ -49,6 +49,7 @@ const useStore = defineStore("store", {
       deadzoneLayer: null as DeadzoneCanvasLayer | null,
       suggestionMarkers: [] as L.Marker[],
       _pathReloadTimer: 0 as number,
+      _pollTimer: 0 as number,
       _prefillCoords: null as { lat: number; lon: number } | null,
       matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
@@ -100,9 +101,7 @@ const useStore = defineStore("store", {
         const towers: { id: string; name: string; color: string | null; params: Record<string, unknown> }[] =
           data.towers ?? [];
 
-        const newTowers = towers.filter(
-          (tower) => !this.localSites.find((s: Site) => s.taskId === tower.id),
-        );
+        const newTowers = towers.filter((tower) => !this.localSites.find((s: Site) => s.taskId === tower.id));
 
         const fetchResults = await Promise.allSettled(
           newTowers.map(async (tower) => {
@@ -300,31 +299,51 @@ const useStore = defineStore("store", {
 
         const marker = L.marker([suggestion.lat, suggestion.lon], { icon }).addTo(this.map);
 
-        marker.bindPopup(`
-          <div style="max-width: min(200px, 80vw)">
-            <strong>Suggested Site #${suggestion.priority_rank}</strong><br>
-            <small>${suggestion.reason}</small><br>
-            <hr style="margin: 4px 0">
-            <b>Est. coverage:</b> ${suggestion.estimated_coverage_km2.toFixed(1)} km&sup2;<br>
-            <b>Location:</b> ${suggestion.lat.toFixed(4)}, ${suggestion.lon.toFixed(4)}<br>
-            <button class="btn btn-sm btn-primary mt-2 js-prefill-btn">Use as transmitter site</button>
-          </div>
-        `);
+        const popupEl = document.createElement("div");
+        popupEl.style.maxWidth = "min(200px, 80vw)";
+
+        const title = document.createElement("strong");
+        title.textContent = `Suggested Site #${suggestion.priority_rank}`;
+        popupEl.appendChild(title);
+        popupEl.appendChild(document.createElement("br"));
+
+        const reason = document.createElement("small");
+        reason.textContent = suggestion.reason;
+        popupEl.appendChild(reason);
+        popupEl.appendChild(document.createElement("br"));
+
+        const hr = document.createElement("hr");
+        hr.style.margin = "4px 0";
+        popupEl.appendChild(hr);
+
+        const coverage = document.createElement("span");
+        coverage.innerHTML = `<b>Est. coverage:</b> ${suggestion.estimated_coverage_km2.toFixed(1)} km&sup2;`;
+        popupEl.appendChild(coverage);
+        popupEl.appendChild(document.createElement("br"));
+
+        const location = document.createElement("span");
+        location.innerHTML = `<b>Location:</b> ${suggestion.lat.toFixed(4)}, ${suggestion.lon.toFixed(4)}`;
+        popupEl.appendChild(location);
+        popupEl.appendChild(document.createElement("br"));
+
+        const btn = document.createElement("button");
+        btn.className = "btn btn-sm btn-primary mt-2 js-prefill-btn";
+        btn.textContent = "Use as transmitter site";
+        popupEl.appendChild(btn);
 
         const { lat, lon } = suggestion;
-        marker.on("popupopen", () => {
-          const btn = marker.getPopup()?.getElement()?.querySelector(".js-prefill-btn");
-          btn?.addEventListener("click", () => {
-            this.prefillTransmitter(lat, lon);
-          });
+        btn.addEventListener("click", () => {
+          this.prefillTransmitter(lat, lon);
         });
+
+        marker.bindPopup(popupEl);
 
         this.suggestionMarkers.push(marker);
       }
     },
     _clearDeadzoneOverlay(): void {
       if (this.deadzoneLayer && this.map) {
-        this.map.removeLayer(this.deadzoneLayer as L.Layer);
+        this.map.removeLayer(this.deadzoneLayer);
         this.deadzoneLayer = null;
       }
       for (const marker of this.suggestionMarkers) {
@@ -559,13 +578,12 @@ const useStore = defineStore("store", {
 
       // EasyPrint control
       L.easyPrint({
-          title: "Save",
-          position: "bottomleft",
-          sizeModes: ["A4Portrait", "A4Landscape"],
-          filename: "sites",
-          exportOnly: true,
-        })
-        .addTo(this.map as L.Map);
+        title: "Save",
+        position: "bottomleft",
+        sizeModes: ["A4Portrait", "A4Landscape"],
+        filename: "sites",
+        exportOnly: true,
+      }).addTo(this.map as L.Map);
 
       L.control
         .layers(
@@ -591,6 +609,10 @@ const useStore = defineStore("store", {
       try {
         const payload = buildSimulationPayload(this.splatParams);
 
+        if (this._pollTimer) {
+          clearTimeout(this._pollTimer);
+          this._pollTimer = 0;
+        }
         this.simulationState = "running";
         this.simulationError = "";
 
@@ -672,7 +694,7 @@ const useStore = defineStore("store", {
             console.error("Simulation failed:", errorMsg);
             this.simulationError = errorMsg;
           } else {
-            setTimeout(pollStatus, pollInterval); // Retry after interval
+            this._pollTimer = window.setTimeout(pollStatus, pollInterval);
           }
         };
 

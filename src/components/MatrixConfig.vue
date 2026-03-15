@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, onUnmounted } from "vue";
 import { useStore } from "../store.ts";
 import { arrayToRecord } from "../utils.ts";
 import { HARDWARE_LABELS, ANTENNA_LABELS, TERRAIN_LABELS, labelsToOptions } from "../presets/labels.ts";
@@ -99,8 +99,15 @@ onMounted(async () => {
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+onUnmounted(() => {
+  if (saveTimeout) {
+    clearTimeout(saveTimeout);
+    saveTimeout = null;
+  }
+});
+
 async function toggle(section: keyof MatrixConfig, key: string) {
-  (config[section])[key] = !config[section][key];
+  config[section][key] = !config[section][key];
   try {
     const response = await fetch("/matrix/config", {
       method: "PUT",

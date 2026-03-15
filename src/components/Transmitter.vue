@@ -90,7 +90,12 @@
       </div>
       <div class="col-12 col-sm-6">
         <label for="regionPreset" class="form-label">Country / Region</label>
-        <select id="regionPreset" v-model="selectedRegion" class="form-select form-select-sm" @change="() => onRegionChange()">
+        <select
+          id="regionPreset"
+          v-model="selectedRegion"
+          class="form-select form-select-sm"
+          @change="() => onRegionChange()"
+        >
           <option value="">Custom</option>
           <option v-for="freq in FREQUENCY_PRESETS" :key="freq.code" :value="freq.code">
             {{ freq.region }} ({{ freq.code }}) — {{ freq.frequency_mhz }} MHz
@@ -124,9 +129,16 @@
       </div>
       <div class="col-12 col-sm-6">
         <label for="heightPreset" class="form-label">Height Preset</label>
-        <select id="heightPreset" v-model="selectedHeight" class="form-select form-select-sm" @change="() => onHeightChange()">
+        <select
+          id="heightPreset"
+          v-model="selectedHeight"
+          class="form-select form-select-sm"
+          @change="() => onHeightChange()"
+        >
           <option value="">Custom</option>
-          <option v-for="h in HEIGHT_PRESETS" :key="h.label" :value="h.label">{{ h.label }} ({{ h.height_m }} m)</option>
+          <option v-for="h in HEIGHT_PRESETS" :key="h.label" :value="h.label">
+            {{ h.label }} ({{ h.height_m }} m)
+          </option>
         </select>
       </div>
     </div>
@@ -307,24 +319,26 @@ const centerMapOnTransmitter = () => {
 };
 let popover: bootstrap.Popover | null = null;
 
+const mapClickHandler = (e: L.LeafletMouseEvent) => {
+  const { lat } = e.latlng;
+  let { lng } = e.latlng;
+  lng = ((((lng + 180) % 360) + 360) % 360) - 180;
+
+  store.setTxCoords(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
+
+  if (store.currentMarker && store.map) {
+    store.map.removeLayer(store.currentMarker as L.Marker);
+  }
+  if (store.map) {
+    store.currentMarker = L.marker([lat, lng], { icon: redPinMarker }).addTo(store.map);
+  }
+  popover?.hide();
+};
+
 const setWithMap = () => {
   if (!store.map) return;
   popover?.show();
-  store.map.once("click", (e: L.LeafletMouseEvent) => {
-    const { lat } = e.latlng;
-    let { lng } = e.latlng;
-    lng = ((((lng + 180) % 360) + 360) % 360) - 180;
-
-    store.setTxCoords(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
-
-    if (store.currentMarker && store.map) {
-      store.map.removeLayer(store.currentMarker as L.Marker);
-    }
-    if (store.map) {
-      store.currentMarker = L.marker([lat, lng], { icon: redPinMarker }).addTo(store.map);
-    }
-    popover?.hide();
-  });
+  store.map.once("click", mapClickHandler);
 };
 watch(
   () => store._prefillCoords,
@@ -345,13 +359,17 @@ watch(
 );
 
 onMounted(() => {
-  popover = new bootstrap.Popover(document.getElementById("setWithMap") as Element, {
-    trigger: "manual",
-  });
+  const popoverEl = document.getElementById("setWithMap");
+  if (popoverEl) {
+    popover = new bootstrap.Popover(popoverEl, {
+      trigger: "manual",
+    });
+  }
   store.initMap();
 });
 
 onUnmounted(() => {
+  store.map?.off("click", mapClickHandler);
   popover?.dispose();
   popover = null;
 });

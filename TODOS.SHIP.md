@@ -63,19 +63,19 @@
 
 ### High
 
-- [ ] 35. Deadzone popup listener accumulates on every `popupopen` (`store.ts:315-320`) — use `{ once: true }`
-- [ ] 36. Simulation polling `setTimeout` not tracked or cancelable (`store.ts:675`) — store timer ID
-- [ ] 37. `saveTimeout` not cleared on unmount (`MatrixConfig.vue:100-129`) — add `onUnmounted` cleanup
-- [ ] 38. Map click listener orphaned if component unmounts before click (`Transmitter.vue:313`) — remove on unmount
+- [x] 35. Deadzone popup listener accumulates on every `popupopen` (`store.ts:315-320`) — use `{ once: true }`
+- [x] 36. Simulation polling `setTimeout` not tracked or cancelable (`store.ts:675`) — store timer ID
+- [x] 37. `saveTimeout` not cleared on unmount (`MatrixConfig.vue:100-129`) — add `onUnmounted` cleanup
+- [x] 38. Map click listener orphaned if component unmounts before click (`Transmitter.vue:313`) — remove on unmount
 
 ### Medium
 
-- [ ] 39. Backend `suggestion.reason` interpolated unsanitized into Leaflet popup HTML (`store.ts:306`) — use safe DOM
-- [ ] 40. Popover init crashes on null element (`Transmitter.vue:348`) — add null guard
+- [x] 39. Backend `suggestion.reason` interpolated unsanitized into Leaflet popup HTML (`store.ts:306`) — use safe DOM
+- [x] 40. Popover init crashes on null element (`Transmitter.vue:348`) — add null guard
 
 ### Low
 
-- [ ] 41. Unnecessary `as L.Layer` type assertion (`store.ts:327`) — remove redundant cast
+- [x] 41. Unnecessary `as L.Layer` type assertion (`store.ts:327`) — remove redundant cast
 
 ---
 
