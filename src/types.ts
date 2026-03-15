@@ -12,6 +12,7 @@ export interface SplatParams {
         tx_freq: number;
         tx_height: number;
         tx_gain: number;
+        tx_swr: number;
     };
     receiver: {
         rx_sensitivity: number;

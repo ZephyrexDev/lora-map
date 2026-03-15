@@ -32,6 +32,28 @@ logging.getLogger("s3transfer").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
+def mismatch_loss_db(swr: float) -> float:
+    """Calculate SWR mismatch loss in dB."""
+    if swr <= 1.0:
+        return 0.0
+    reflection = ((swr - 1) / (swr + 1)) ** 2
+    return -10 * math.log10(1 - reflection)
+
+
+    # TODO: DRY — binary validation (lines 93-117) repeats the same
+    # isfile+access check four times. Replace with a loop over a dict of
+    # {attr_name: binary_name}, e.g.:
+    #   BINARIES = {"splat_binary": "splat", "splat_hd_binary": "splat-hd", ...}
+    #   for attr, name in BINARIES.items():
+    #       path = splat_dir / name
+    #       if not path.is_file() or not os.access(path, os.X_OK):
+    #           raise FileNotFoundError(...)
+    #       setattr(self, attr, path)
+    #
+    # TODO: Code standards — use pathlib.Path throughout this file per
+    # CLAUDE.md ("Prefer pathlib.Path over os.path"). splat_path, binary
+    # paths, tmpdir file joins, hgt_path, sdf_path all use os.path today.
+
 class Splat:
     def __init__(
         self,
@@ -162,6 +184,13 @@ class Splat:
                 with open(os.path.join(tmpdir, "tx.qth"), "wb") as qth_file:
                     qth_file.write(Splat._create_splat_qth("tx",request.lat,request.lon,request.tx_height))
 
+                # Apply SWR mismatch loss to effective TX power
+                effective_tx_power = request.tx_power - mismatch_loss_db(request.swr)
+                logger.debug(
+                    f"SWR={request.swr}, mismatch_loss={mismatch_loss_db(request.swr):.2f} dB, "
+                    f"effective_tx_power={effective_tx_power:.2f} dBm (was {request.tx_power:.2f} dBm)"
+                )
+
                 # write model parameter / lrp file
                 with open(os.path.join(tmpdir,"splat.lrp"), "wb") as lrp_file:
                     lrp_file.write(Splat._create_splat_lrp(
@@ -173,7 +202,7 @@ class Splat:
                         polarization=request.polarization,
                         situation_fraction=request.situation_fraction,
                         time_fraction=request.time_fraction,
-                        tx_power=request.tx_power,
+                        tx_power=effective_tx_power,
                         tx_gain=request.tx_gain,
                         system_loss=request.system_loss))
 
@@ -244,6 +273,10 @@ class Splat:
                 logger.info("SPLAT! coverage prediction completed successfully.")
                 return geotiff_data
 
+            # TODO: Exception chaining — all except blocks in this file wrap
+            # and re-raise without chaining (raise RuntimeError(...) instead of
+            # raise RuntimeError(...) from e). This drops the original traceback.
+            # Add "from e" to every re-raise to preserve the cause chain.
             except Exception as e:
                 logger.error(f"Error during coverage prediction: {e}")
                 raise RuntimeError(f"Error during coverage prediction: {e}")
@@ -438,6 +471,20 @@ class Splat:
             logger.error(f"Error generating .lrp file content: {e}")
             raise
 
+    # TODO: DRY — colormap RGB generation is repeated in _create_splat_dcf,
+    # _create_splat_geotiff, and create_splat_colorbar. All three call
+    # plt.get_cmap / plt.Normalize / np.linspace / slice [:,:3]*255. Extract
+    # a shared helper, e.g.:
+    #   @staticmethod
+    #   def _colormap_to_rgb(name: str, min_dbm: float, max_dbm: float,
+    #                        levels: int = 255) -> np.ndarray:
+    #       cmap = plt.get_cmap(name, max(levels, 256))
+    #       norm = plt.Normalize(vmin=min_dbm, vmax=max_dbm)
+    #       vals = np.linspace(min_dbm, max_dbm, levels)
+    #       return (cmap(norm(vals))[:, :3] * 255).astype(int)
+    # Then _create_splat_dcf passes levels=32 with reversed linspace,
+    # _create_splat_geotiff passes levels=255, and create_splat_colorbar
+    # just returns the helper's output.
     @staticmethod
     def _create_splat_dcf(
             colormap_name: str, min_dbm: float, max_dbm: float
@@ -599,6 +646,10 @@ class Splat:
             logger.error(f"Error during GeoTIFF generation: {e}")
             raise RuntimeError(f"Error during GeoTIFF generation: {e}")
 
+    # TODO: DRY — _download_terrain_tile duplicates the S3 fetch + cache
+    # store pattern for the V1 fallback (lines 648-656 repeat 643-647).
+    # Extract a small _fetch_and_cache(s3_key, cache_key) helper to
+    # eliminate the duplicated obj/read/cache/return block.
     def _download_terrain_tile(self, tile_name: str) -> bytes:
         """
         Downloads a terrain tile from the S3 bucket if not found in the local cache.

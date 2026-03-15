@@ -23,10 +23,11 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.auth import require_admin, router as auth_router
 from app.db import get_db, init_db
 from app.db.connection import DEFAULT_DB_PATH
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
@@ -48,8 +49,18 @@ async def lifespan(application: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)
 
 
+# TODO: DRY — every endpoint and run_splat repeats the same
+# conn = get_db() / try / finally: conn.close() pattern (5 occurrences).
+# Make get_db() a context manager (contextlib.closing or __enter__/__exit__)
+# so callers use "with get_db() as conn:" instead. This also prevents
+# leaked connections if code between get_db() and try raises.
+#
+# TODO: DRY — init_db() in schema.py opens its own raw sqlite3.connect()
+# and re-applies the same PRAGMAs that get_db() sets. Have init_db() call
+# get_db() instead to keep PRAGMA config in one place.
 def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -> None:
     """Execute the SPLAT! coverage prediction and persist results to SQLite.
 
@@ -91,7 +102,7 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
             conn.close()
 
 
-@app.post("/predict")
+@app.post("/predict", dependencies=[Depends(require_admin)])
 async def predict(
     payload: CoveragePredictionRequest,
     background_tasks: BackgroundTasks,
@@ -240,7 +251,7 @@ async def list_towers() -> JSONResponse:
     return JSONResponse({"towers": towers})
 
 
-@app.delete("/towers/{tower_id}")
+@app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)])
 async def delete_tower(tower_id: str) -> JSONResponse:
     """Delete a tower and its associated tasks (via CASCADE).
 

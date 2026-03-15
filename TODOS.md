@@ -87,7 +87,27 @@ Towers have fixed hardware/antenna/height configs set by admin. The matrix varie
 - [ ] On tower creation, auto-queue the full client matrix as background tasks
 - [ ] Show matrix completion progress in admin UI
 
-## 9. Meshcore tower path simulation
+## 9. Frontend performance refactors (`src/store.ts`)
+
+- [ ] Store a `GeoRasterLayer` ref on each `Site` object instead of recreating layers on every redraw
+- [ ] Replace `redrawSites()` remove/re-add with per-site `setOpacity()` toggling and `bringToFront()` on baselayerchange
+- [ ] Fix `removeSite()` double layer iteration — with per-site refs, just call `map.removeLayer(site.layer)`
+- [ ] Remove needless `{...site}.raster` shallow clone — pass `site.raster` directly
+- [ ] Wire `display.overlay_transparency` to GeoRasterLayer opacity (currently hardcoded 0.7)
+- [ ] Add retry cap, exponential backoff, and abort handling to `pollStatus()` loop
+
+## 10. Backend DRY & code quality
+
+- [ ] `app/services/splat.py` — replace 4× repeated binary isfile+access validation with a loop over a dict
+- [ ] `app/services/splat.py` — extract shared colormap RGB helper (duplicated in `_create_splat_dcf`, `_create_splat_geotiff`, `create_splat_colorbar`)
+- [ ] `app/services/splat.py` — extract `_fetch_and_cache(s3_key, cache_key)` helper in `_download_terrain_tile` (V1 fallback duplicates fetch+cache block)
+- [ ] `app/services/splat.py` — add `from e` exception chaining to all re-raises (currently drops tracebacks)
+- [ ] `app/services/splat.py` — migrate `os.path` usage to `pathlib.Path` per CLAUDE.md code standards
+- [ ] `app/main.py` — make `get_db()` a context manager to eliminate 5× repeated `conn = get_db() / try / finally: conn.close()` boilerplate
+- [ ] `app/db/schema.py` — have `init_db()` use `get_db()` instead of opening its own raw connection (duplicates PRAGMA setup)
+- [ ] `pyproject.toml` — `haversine` is listed as a dependency but never imported; either use it in `_calculate_required_terrain_tiles` or remove it
+
+## 11. Meshcore tower path simulation
 
 - [ ] Add SPLAT! point-to-point analysis function in `app/services/splat.py`
 - [ ] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers

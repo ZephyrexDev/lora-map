@@ -22,6 +22,9 @@ class CoveragePredictionRequest(BaseModel):
     )
     tx_power: float = Field(gt=0, description="Transmitter power in dBm (>= 1 dBm)")
     tx_gain: float = Field(1, ge=0, description="Transmitter antenna gain in dB (>= 0)")
+    swr: Optional[float] = Field(
+        1.0, ge=1.0, description="Antenna standing wave ratio (>= 1.0, default: 1.0). Used to calculate SWR mismatch loss."
+    )
     frequency_mhz: float = Field(
         905.0, ge=20, le=30000, description="Operating frequency in MHz (20-30000 MHz)"
     )

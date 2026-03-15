@@ -24,7 +24,8 @@ const useStore = defineStore('store', {
           tx_power: 0.1,
           tx_freq: 907.0,
           tx_height: 2.0,
-          tx_gain: 2.0
+          tx_gain: 2.0,
+          tx_swr: 1.0
         },
         receiver: {
           rx_sensitivity: -130.0,
@@ -60,6 +61,10 @@ const useStore = defineStore('store', {
       this.splatParams.transmitter.tx_lat = lat
       this.splatParams.transmitter.tx_lon = lon
     },
+    // TODO: Performance — removeSite iterates all map layers to remove
+    // GeoRasterLayers, then redrawSites() does the same iteration again
+    // before re-adding. With per-site layer refs, this becomes a single
+    // map.removeLayer(site.layer) call with no full-map iteration.
     removeSite(index: number) {
       if (!this.map) {
         return
@@ -72,6 +77,19 @@ const useStore = defineStore('store', {
       });
       this.redrawSites()
     },
+    // TODO: Performance — replace remove/re-add with per-site GeoRasterLayer
+    // instances stored on each Site object. Use layer.setOpacity(0) /
+    // layer.setOpacity(original) for visibility toggling and bringToFront()
+    // on baselayerchange instead of tearing down every layer. This avoids
+    // redundant georaster re-initialization on every redraw. See CLAUDE.md
+    // "Layer Management" for the target pattern.
+    //
+    // TODO: Performance — the hardcoded opacity: 0.7 ignores the user's
+    // display.overlay_transparency setting. Wire it up when refactoring
+    // to per-site layers (read from splatParams.display.overlay_transparency).
+    //
+    // TODO: Cleanup — {...site}.raster shallow-clones the site object
+    // needlessly on every redraw. Pass site.raster directly.
     redrawSites() {
       if (!this.map) {
         return;
@@ -163,6 +181,7 @@ const useStore = defineStore('store', {
           tx_height: this.splatParams.transmitter.tx_height,
           tx_power: 10 * Math.log10(this.splatParams.transmitter.tx_power) + 30,
           tx_gain: this.splatParams.transmitter.tx_gain,
+          swr: this.splatParams.transmitter.tx_swr,
           frequency_mhz: this.splatParams.transmitter.tx_freq,
 
           // Receiver parameters
@@ -214,7 +233,11 @@ const useStore = defineStore('store', {
     
         console.log(`Prediction started with task ID: ${taskId}`);
 
-        // Poll for task status and result
+        // TODO: Performance — polling has no retry cap or exponential backoff.
+        // A failed /status fetch throws and silently kills the poll loop.
+        // Consider: (1) cap retries (e.g. 300 = 5 min at 1s), (2) exponential
+        // backoff for long simulations, (3) abort polling if the store/component
+        // is torn down (e.g. AbortController or a cancelled flag).
         const pollInterval = 1000; // 1 seconds
         const pollStatus = async () => {
           const statusResponse = await fetch(

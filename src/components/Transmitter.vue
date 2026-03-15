@@ -157,6 +157,7 @@
         const preset = ANTENNA_PRESETS[selectedAntenna.value];
         if (!preset) return;
         transmitter.tx_gain = preset.gain_dbi;
+        transmitter.tx_swr = preset.swr;
     }
 
     function onHeightChange() {
