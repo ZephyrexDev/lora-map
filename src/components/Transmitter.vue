@@ -206,7 +206,7 @@
         class="btn btn-primary btn-sm"
         data-bs-toggle="popover"
         data-bs-trigger="manual"
-        data-bs-placement="left"
+        data-bs-placement="auto"
         title="Set Coordinates"
         data-bs-content=""
         content="Click on the map to set the transmitter location."

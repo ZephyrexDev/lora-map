@@ -98,12 +98,13 @@
       Requires at least 2 completed simulations
     </small>
     <div v-if="store.showDeadzones && store.deadzoneAnalysis" class="mt-2">
-      <small class="text-muted">
+      <small class="text-muted d-block" style="line-height: 1.6">
         Coverage: {{ (store.deadzoneAnalysis.coverage_fraction * 100).toFixed(1) }}% ({{
           store.deadzoneAnalysis.total_coverage_km2.toFixed(1)
         }}
-        km&sup2;) &middot; Deadzones: {{ store.deadzoneAnalysis.total_deadzone_km2.toFixed(1) }} km&sup2; &middot;
-        {{ store.deadzoneAnalysis.suggestions.length }} suggested sites
+        km&sup2;)<br class="d-sm-none" />
+        &middot; Deadzones: {{ store.deadzoneAnalysis.total_deadzone_km2.toFixed(1) }} km&sup2;<br class="d-sm-none" />
+        &middot; {{ store.deadzoneAnalysis.suggestions.length }} suggested sites
       </small>
     </div>
   </form>

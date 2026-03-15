@@ -242,7 +242,7 @@ const useStore = defineStore("store", {
         const marker = L.marker([suggestion.lat, suggestion.lon], { icon }).addTo(this.map);
 
         marker.bindPopup(`
-          <div style="min-width: 200px">
+          <div style="max-width: min(200px, 80vw)">
             <strong>Suggested Site #${suggestion.priority_rank}</strong><br>
             <small>${suggestion.reason}</small><br>
             <hr style="margin: 4px 0">

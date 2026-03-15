@@ -5,9 +5,10 @@ body {
   padding: 0;
 }
 
+/* Offset map below fixed navbar */
 #map {
-  height: 100vh;
-  margin: 0;
+  margin-top: 56px;
+  height: calc(100vh - 56px);
   padding: 0;
 }
 
@@ -21,11 +22,31 @@ body {
     overflow-y: auto;
   }
 
+  .offcanvas .dropdown-menu {
+    position: static !important;
+    transform: none !important;
+    width: 100%;
+    border: none;
+    box-shadow: none;
+  }
+
   .navbar-brand {
     max-width: calc(100vw - 120px);
   }
 
   .row.g-2 > [class*="col-"] {
     margin-bottom: 0.25rem;
+  }
+
+  .form-check-inline {
+    display: block;
+    margin-right: 0;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .offcanvas.show {
+    max-height: 50vh;
+    overflow-y: auto;
   }
 }

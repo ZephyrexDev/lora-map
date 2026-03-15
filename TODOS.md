@@ -237,3 +237,19 @@ A fourth virtual terrain model that blends the three real models into a single c
 ### Minor
 - [x] Prevent navbar brand text + buttons from overflowing on very narrow viewports — `text-truncate` on brand, `flex-shrink-0` on buttons, max-width constraint
 - [x] Add mobile-specific CSS rules in style.css for offcanvas sidebar max-height and overflow on small screens
+
+### Round 2 — Critical
+- [x] Fix dropdown menus clipped inside offcanvas on mobile — `position: static` + no transform on mobile
+- [x] Fix map hidden under fixed navbar — `margin-top: 56px` and `height: calc(100vh - 56px)`
+- [x] Fix offcanvas covering entire map on phones — 60vh max-height with scroll
+
+### Round 2 — Medium
+- [x] Increase touch targets on TowerList eye/trash buttons — `py-1 px-2` with `min-width/min-height: 36px`
+- [x] Fix MatrixConfig inline checkboxes overflow on mobile — `form-check-inline` becomes `display: block` on <576px
+- [x] Improve deadzone stats text wrapping in Display.vue — `<br class="d-sm-none">` line breaks on mobile only
+
+### Round 2 — Minor
+- [x] Fix "Set with Map" popover placement on mobile — changed to `data-bs-placement="auto"`
+- [x] Increase tower color circle size in TowerList — 10px → 12px
+- [x] Fix suggestion marker popup width on small screens — `min-width: 200px` → `max-width: min(200px, 80vw)`
+- [x] Add landscape-specific media query to reduce offcanvas height on landscape phones

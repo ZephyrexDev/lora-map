@@ -9,7 +9,7 @@
         <span class="text-truncate me-2" :class="{ 'text-muted': !site.visible }">
           <span
             class="d-inline-block rounded-circle me-1"
-            :style="{ backgroundColor: site.color || '#4a90d9', width: '10px', height: '10px' }"
+            :style="{ backgroundColor: site.color || '#4a90d9', width: '12px', height: '12px' }"
           ></span>
           {{ site.params.transmitter.name }}
           <span
@@ -23,7 +23,8 @@
         <span class="d-flex gap-1 flex-shrink-0">
           <button
             type="button"
-            class="btn btn-sm btn-outline-light py-0 px-1"
+            class="btn btn-sm btn-outline-light py-1 px-2"
+            style="min-width: 36px; min-height: 36px"
             :title="site.visible ? 'Hide layer' : 'Show layer'"
             @click="store.toggleSiteVisibility(index)"
           >
@@ -33,7 +34,8 @@
           <button
             v-if="store.isAdmin"
             type="button"
-            class="btn btn-sm btn-outline-danger py-0 px-1"
+            class="btn btn-sm btn-outline-danger py-1 px-2"
+            style="min-width: 36px; min-height: 36px"
             title="Delete tower"
             @click="store.removeSite(index)"
           >
