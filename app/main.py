@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, Depends, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -319,11 +319,18 @@ async def delete_tower(tower_id: str) -> JSONResponse:
 
 
 @app.get("/towers/{tower_id}/simulations")
-async def list_tower_simulations(tower_id: str) -> JSONResponse:
+async def list_tower_simulations(
+    tower_id: str,
+    enabled_only: bool = Query(False, description="Filter to only simulations matching enabled matrix config members"),
+) -> JSONResponse:
     """Return all simulations for a tower (without GeoTIFF blobs).
+
+    When ``enabled_only=true``, only simulations whose hardware, antenna, and
+    terrain values are all currently enabled in the matrix config are returned.
 
     Args:
         tower_id: The unique identifier for the tower.
+        enabled_only: If true, filter by current matrix config enabled members.
 
     Returns:
         JSONResponse with a list of simulation objects.
@@ -334,6 +341,18 @@ async def list_tower_simulations(tower_id: str) -> JSONResponse:
             "FROM simulations WHERE tower_id = ?",
             (tower_id,),
         ).fetchall()
+
+        if enabled_only:
+            config = get_matrix_config(conn)
+            enabled_hw = set(config.get("hardware", []))
+            enabled_ant = set(config.get("antennas", []))
+            enabled_ter = set(config.get("terrain", []))
+            rows = [
+                r for r in rows
+                if r["client_hardware"] in enabled_hw
+                and r["client_antenna"] in enabled_ant
+                and r["terrain_model"] in enabled_ter
+            ]
 
     simulations = [
         {
