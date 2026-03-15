@@ -237,7 +237,7 @@
 import L from "leaflet";
 import * as bootstrap from "bootstrap";
 import { useStore } from "../store.ts";
-import { onMounted, onUnmounted, ref, computed, watch } from "vue";
+import { onMounted, onUnmounted, ref, computed } from "vue";
 import { redPinMarker } from "../layers.ts";
 import { dbmToWatts } from "../utils.ts";
 import { HARDWARE_PRESETS } from "../presets/hardware.ts";
@@ -340,24 +340,6 @@ const setWithMap = () => {
   popover?.show();
   store.map.once("click", mapClickHandler);
 };
-watch(
-  () => store._prefillCoords,
-  (coords) => {
-    if (!coords) return;
-    const { lat, lon } = coords;
-    transmitter.tx_lat = lat;
-    transmitter.tx_lon = lon;
-
-    if (!store.map) return;
-    if (store.currentMarker) {
-      store.map.removeLayer(store.currentMarker as L.Marker);
-    }
-    store.currentMarker = L.marker([lat, lon], { icon: redPinMarker }).addTo(store.map);
-    store.map.setView([lat, lon], store.map.getZoom());
-    store._prefillCoords = null;
-  },
-);
-
 onMounted(() => {
   const popoverEl = document.getElementById("setWithMap");
   if (popoverEl) {

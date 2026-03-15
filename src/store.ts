@@ -50,7 +50,6 @@ const useStore = defineStore("store", {
       suggestionMarkers: [] as L.Marker[],
       _pathReloadTimer: 0 as number,
       _pollTimer: 0 as number,
-      _prefillCoords: null as { lat: number; lon: number } | null,
       matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
         transmitter: {
@@ -426,7 +425,14 @@ const useStore = defineStore("store", {
       this.splatParams.transmitter.tx_lon = lon;
     },
     prefillTransmitter(lat: number, lon: number) {
-      this._prefillCoords = { lat, lon };
+      this.splatParams.transmitter.tx_lat = lat;
+      this.splatParams.transmitter.tx_lon = lon;
+      if (!this.map) return;
+      if (this.currentMarker) {
+        this.map.removeLayer(this.currentMarker as L.Marker);
+      }
+      this.currentMarker = L.marker([lat, lon], { icon: redPinMarker }).addTo(this.map);
+      this.map.setView([lat, lon], this.map.getZoom());
     },
     async removeSite(index: number) {
       if (!this.map) return;
