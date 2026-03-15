@@ -77,11 +77,14 @@
 
 ## 8. Pre-cached client simulation matrix
 
-- [ ] Define simulation matrix: hardware (V3, V4) × antenna (4 options) = 8 combinations per tower site
-- [ ] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower location
-- [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + hardware + antenna
-- [ ] Add UI selector to switch between cached client configurations per tower (no re-simulation needed)
-- [ ] On tower creation, auto-queue the full matrix of simulations as background tasks
+Towers have fixed hardware/antenna/height configs set by admin. The matrix varies the **client (receiver)** side — showing "what coverage does a visitor with client hardware X and antenna Y see from this tower?"
+
+- [ ] Define client simulation matrix: client hardware (V3, V4) × client antenna (4 options) = 8 receiver configurations per tower
+- [ ] Matrix varies receiver gain, sensitivity, and SWR mismatch loss — tower TX params stay fixed
+- [ ] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower
+- [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna
+- [ ] Add UI selector for visitors to pick their client hardware + antenna and instantly see the matching cached coverage layer
+- [ ] On tower creation, auto-queue the full client matrix as background tasks
 - [ ] Show matrix completion progress in admin UI
 
 ## 9. Meshcore tower path simulation
