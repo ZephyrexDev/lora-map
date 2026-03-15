@@ -58,3 +58,32 @@
 - [ ] 32. Raw SQL throughout codebase — migrate to SQLAlchemy (deferred: requires full ORM migration)
 - [ ] 33. No retry mechanism for failed simulations — user must re-POST (deferred: acceptable for MVP)
 - [ ] 34. PPM image fully loaded into memory for large radius simulations (deferred: rare edge case)
+
+## Round 3 — Frontend Pre-Ship Review (2026-03-15)
+
+### High
+
+- [ ] 35. Deadzone popup listener accumulates on every `popupopen` (`store.ts:315-320`) — use `{ once: true }`
+- [ ] 36. Simulation polling `setTimeout` not tracked or cancelable (`store.ts:675`) — store timer ID
+- [ ] 37. `saveTimeout` not cleared on unmount (`MatrixConfig.vue:100-129`) — add `onUnmounted` cleanup
+- [ ] 38. Map click listener orphaned if component unmounts before click (`Transmitter.vue:313`) — remove on unmount
+
+### Medium
+
+- [ ] 39. Backend `suggestion.reason` interpolated unsanitized into Leaflet popup HTML (`store.ts:306`) — use safe DOM
+- [ ] 40. Popover init crashes on null element (`Transmitter.vue:348`) — add null guard
+
+### Low
+
+- [ ] 41. Unnecessary `as L.Layer` type assertion (`store.ts:327`) — remove redundant cast
+
+---
+
+## E2E Integration Testing (Playwright)
+
+- [ ] 42. Install Playwright, create `playwright.config.ts` with dual `webServer` (Vite + Uvicorn)
+- [ ] 43. Create E2E test fixtures — DB seeding, auth helpers, shared utilities
+- [ ] 44. Visitor flow test — app loads, `GET /towers` returns data, map renders
+- [ ] 45. Admin auth flow test — login form → token → protected endpoints accessible, bad creds rejected
+- [ ] 46. API integration tests — tower CRUD, tower-paths list, matrix config round-trip
+- [ ] 47. Add `test:e2e` script to `package.json` and `test-e2e` CI job gated behind unit tests
