@@ -26,7 +26,7 @@ class PredictResponse(BaseModel):
 
 
 class TaskStatusResponse(BaseModel):
-    task_id: str
+    id: str
     status: str
     error: str | None = None
 

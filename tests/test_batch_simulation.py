@@ -86,7 +86,7 @@ class TestGetSimulationResult:
     def test_returns_404_for_unknown_id(self, client):
         resp = client.get(f"/simulations/{uuid4()}/result")
         assert resp.status_code == 404
-        assert "error" in resp.json()
+        assert "detail" in resp.json()
 
     def test_returns_geotiff_for_completed_simulation(self, client, valid_payload):
         with patch("app.main.splat_service.coverage_prediction", return_value=b"FAKE_TIFF"):

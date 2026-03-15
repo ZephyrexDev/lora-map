@@ -254,6 +254,11 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] `db_connection()` missing return type annotation — add `Generator[sqlite3.Connection, None, None]`
 - [x] `_deadzone_cache: dict[str, Any]` is untyped module-level mutable state — replace with typed `_DeadzoneCache` dataclass
 
+### Consistent error handling (round 5)
+- [x] Replace all `JSONResponse({"error": ...}, status_code=4xx/5xx)` with `HTTPException` — FastAPI's standard error mechanism
+- [x] Remove now-unused `JSONResponse` import from `main.py`
+- [x] Rename `TaskStatusResponse.task_id` → `.id` so it works for both tasks and simulations in shared helper
+
 ## 16. Mobile / responsive design
 
 ### Critical

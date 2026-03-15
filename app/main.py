@@ -19,8 +19,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Query
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_admin
@@ -89,28 +89,26 @@ def _geotiff_response_or_status(
     geotiff: bytes | None,
     error: str | None,
     resource_id: str,
-) -> JSONResponse | StreamingResponse:
-    """Return a GeoTIFF StreamingResponse if completed, or a status JSONResponse."""
+) -> TaskStatusResponse | StreamingResponse:
+    """Return a GeoTIFF StreamingResponse if completed, or a TaskStatusResponse."""
     if status == "completed":
         if geotiff is None:
-            return JSONResponse({"error": "No result found"}, status_code=500)
+            raise HTTPException(status_code=500, detail="No result data found")
         return StreamingResponse(
             io.BytesIO(geotiff),
             media_type="image/tiff",
             headers={"Content-Disposition": f"attachment; filename={resource_id}.tif"},
         )
-    if status == "failed":
-        return JSONResponse({"id": resource_id, "status": "failed", "error": error})
-    return JSONResponse({"id": resource_id, "status": status})
+    return TaskStatusResponse(id=resource_id, status=status, error=error if status == "failed" else None)
 
 
-def _delete_row(table: str, id_column: str, row_id: str, label: str) -> DeleteResponse | JSONResponse:
-    """Delete a row by ID, returning 404 if not found."""
+def _delete_row(table: str, id_column: str, row_id: str, label: str) -> DeleteResponse:
+    """Delete a row by ID, raising HTTPException(404) if not found."""
     with db_connection() as conn:
         cursor = conn.execute(f"DELETE FROM {table} WHERE {id_column} = ?", (row_id,))  # noqa: S608
         conn.commit()
     if cursor.rowcount == 0:
-        return JSONResponse({"error": f"{label} not found"}, status_code=404)
+        raise HTTPException(status_code=404, detail=f"{label} not found")
     logger.info("%s %s deleted.", label, row_id)
     return DeleteResponse(message=f"{label} deleted", id=row_id)
 
@@ -332,28 +330,28 @@ async def predict(
 
 
 @app.get("/status/{task_id}", response_model=TaskStatusResponse)
-async def get_status(task_id: str) -> TaskStatusResponse | JSONResponse:
+async def get_status(task_id: str) -> TaskStatusResponse:
     """Retrieve the status of a prediction task from SQLite."""
     with db_connection() as conn:
         row = conn.execute("SELECT status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
     if row is None:
-        return JSONResponse({"error": "Task not found"}, status_code=404)
+        raise HTTPException(status_code=404, detail="Task not found")
 
     return TaskStatusResponse(
-        task_id=task_id,
+        id=task_id,
         status=row["status"],
         error=row["error"] if row["status"] == "failed" else None,
     )
 
 
 @app.get("/result/{task_id}", response_model=None)
-async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
+async def get_result(task_id: str) -> TaskStatusResponse | StreamingResponse:
     """Retrieve the GeoTIFF result of a prediction task, or its current status."""
     with db_connection() as conn:
         task_row = conn.execute("SELECT tower_id, status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
         if task_row is None:
-            return JSONResponse({"error": "Task not found"}, status_code=404)
+            raise HTTPException(status_code=404, detail="Task not found")
 
         geotiff = None
         if task_row["status"] == "completed":
@@ -388,12 +386,11 @@ async def list_towers() -> TowerListResponse:
     return TowerListResponse(towers=towers)
 
 
-@app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)], response_model=None)
-async def delete_tower(tower_id: str) -> DeleteResponse | JSONResponse:
+@app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)])
+async def delete_tower(tower_id: str) -> DeleteResponse:
     """Delete a tower and its associated tasks (via CASCADE)."""
     result = _delete_row("towers", "id", tower_id, "Tower")
-    if isinstance(result, DeleteResponse):
-        _deadzone_cache.result = None
+    _deadzone_cache.result = None
     return result
 
 
@@ -443,7 +440,7 @@ async def list_tower_simulations(
 
 
 @app.get("/simulations/{sim_id}/result", response_model=None)
-async def get_simulation_result(sim_id: str) -> JSONResponse | StreamingResponse:
+async def get_simulation_result(sim_id: str) -> TaskStatusResponse | StreamingResponse:
     """Return the GeoTIFF result for a completed simulation, or its current status."""
     with db_connection() as conn:
         row = conn.execute(
@@ -452,7 +449,7 @@ async def get_simulation_result(sim_id: str) -> JSONResponse | StreamingResponse
         ).fetchone()
 
     if row is None:
-        return JSONResponse({"error": "Simulation not found"}, status_code=404)
+        raise HTTPException(status_code=404, detail="Simulation not found")
 
     return _geotiff_response_or_status(row["status"], row["geotiff"], row["error"], sim_id)
 
@@ -462,7 +459,7 @@ async def get_aggregate_simulation(
     tower_id: str,
     client_hardware: str = Query(..., description="Client hardware key"),
     client_antenna: str = Query(..., description="Client antenna key"),
-) -> JSONResponse | StreamingResponse:
+) -> StreamingResponse:
     """Return a weighted-aggregate GeoTIFF blending bare_earth, DSM, and LULC results."""
     base_models = ("bare_earth", "dsm", "lulc_clutter")
     blobs: dict[str, bytes] = {}
@@ -486,16 +483,16 @@ async def get_aggregate_simulation(
                 blobs[terrain] = row["geotiff"]
 
     if missing:
-        return JSONResponse(
-            {"error": "Cannot compute weighted aggregate — missing base simulations", "missing": missing},
+        raise HTTPException(
             status_code=404,
+            detail=f"Missing base simulations: {', '.join(missing)}",
         )
 
     try:
         aggregate_tiff = compute_weighted_aggregate(blobs["bare_earth"], blobs["dsm"], blobs["lulc_clutter"])
     except Exception as e:
         logger.error("Weighted aggregate computation failed for tower %s: %s", tower_id, e)
-        return JSONResponse({"error": f"Aggregate computation failed: {e!s}"}, status_code=500)
+        raise HTTPException(status_code=500, detail=f"Aggregate computation failed: {e!s}") from e
 
     return StreamingResponse(
         io.BytesIO(aggregate_tiff),
@@ -517,7 +514,7 @@ async def get_matrix_config_endpoint() -> MatrixConfigRequest:
 
 
 @app.put("/matrix/config", dependencies=[Depends(require_admin)], response_model=MatrixConfigRequest)
-async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> MatrixConfigRequest | JSONResponse:
+async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> MatrixConfigRequest:
     """Update the matrix configuration (admin-only).
 
     All values must be from the known presets.
@@ -534,7 +531,7 @@ async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> MatrixConfigR
             errors.append(f"Unknown {key} values: {sorted(unknown)}")
 
     if errors:
-        return JSONResponse({"errors": errors}, status_code=422)
+        raise HTTPException(status_code=422, detail=errors)
 
     with db_connection() as conn:
         set_matrix_config(conn, body)
@@ -551,7 +548,7 @@ async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> MatrixConfigR
 async def compute_tower_paths(
     background_tasks: BackgroundTasks,
     body: TowerPathsRequest | None = None,
-) -> ComputePathsResponse | JSONResponse:
+) -> ComputePathsResponse:
     """Compute pairwise P2P paths between towers (async — returns 202 Accepted)."""
     with db_connection() as conn:
         if body and body.tower_ids:
@@ -561,7 +558,7 @@ async def compute_tower_paths(
             tower_ids = [r["id"] for r in rows]
 
         if len(tower_ids) < 2:
-            return JSONResponse({"error": "Need at least 2 towers for path analysis"}, status_code=400)
+            raise HTTPException(status_code=400, detail="Need at least 2 towers for path analysis")
 
         pairs: list[tuple[str, str]] = []
         for i, a in enumerate(tower_ids):
@@ -624,7 +621,7 @@ async def list_tower_paths() -> TowerPathListResponse:
 
 
 @app.delete("/tower-paths/{path_id}", dependencies=[Depends(require_admin)])
-async def delete_tower_path(path_id: str) -> DeleteResponse | JSONResponse:
+async def delete_tower_path(path_id: str) -> DeleteResponse:
     """Delete a specific tower path."""
     return _delete_row("tower_paths", "id", path_id, "Path")
 
@@ -649,7 +646,7 @@ _deadzone_cache = _DeadzoneCache()
 
 
 @app.get("/deadzones", response_model=DeadzoneAnalysisResponse)
-async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
+async def get_deadzones() -> DeadzoneAnalysisResponse:
     """Analyze coverage gaps across all completed tower simulations."""
     geotiff_blobs: list[bytes] = []
 
@@ -659,9 +656,9 @@ async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
             geotiff_blobs.append(row["geotiff"])
 
     if len(geotiff_blobs) < 2:
-        return JSONResponse(
-            {"error": "Deadzone analysis requires at least 2 completed tower simulations"},
+        raise HTTPException(
             status_code=400,
+            detail="Deadzone analysis requires at least 2 completed tower simulations",
         )
 
     if _deadzone_cache.result is not None and _deadzone_cache.tower_count == len(geotiff_blobs):
@@ -675,7 +672,7 @@ async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
         return result
     except Exception as e:
         logger.error("Deadzone analysis failed: %s", e)
-        return JSONResponse({"error": f"Deadzone analysis failed: {e!s}"}, status_code=500)
+        raise HTTPException(status_code=500, detail=f"Deadzone analysis failed: {e!s}") from e
 
 
 app.mount("/", StaticFiles(directory="app/ui", html=True), name="ui")

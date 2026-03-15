@@ -58,7 +58,7 @@ class TestGetStatus:
     def test_returns_404_for_unknown_task(self, client):
         resp = client.get(f"/status/{uuid4()}")
         assert resp.status_code == 404
-        assert "error" in resp.json()
+        assert "detail" in resp.json()
 
     def test_returns_status_for_existing_task(self, client):
         tid = insert_tower()
@@ -74,12 +74,12 @@ class TestGetStatus:
         assert body["status"] == "failed"
         assert body["error"] == "Tile download failed"
 
-    def test_completed_task_has_no_error_key(self, client):
+    def test_completed_task_has_null_error(self, client):
         tid = insert_tower()
         kid = insert_task(tower_id=tid, status="completed")
         body = client.get(f"/status/{kid}").json()
         assert body["status"] == "completed"
-        assert "error" not in body
+        assert body["error"] is None
 
 
 # ===========================================================================
