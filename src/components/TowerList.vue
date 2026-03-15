@@ -7,6 +7,10 @@
         :key="site.taskId"
       >
         <span class="text-truncate me-2" :class="{ 'text-muted': !site.visible }">
+          <span
+            class="d-inline-block rounded-circle me-1"
+            :style="{ backgroundColor: site.color || '#4a90d9', width: '10px', height: '10px' }"
+          ></span>
           {{ site.params.transmitter.name }}
         </span>
         <span class="d-flex gap-1 flex-shrink-0">

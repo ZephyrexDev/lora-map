@@ -4,6 +4,7 @@ export interface Site {
     raster: any;
     layer?: any;
     visible: boolean;
+    color: string;
 }
 export interface SplatParams {
     transmitter: {
@@ -15,6 +16,7 @@ export interface SplatParams {
         tx_height: number;
         tx_gain: number;
         tx_swr: number;
+        tx_color: string;
     };
     receiver: {
         rx_sensitivity: number;

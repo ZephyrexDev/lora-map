@@ -108,3 +108,9 @@ class CoveragePredictionRequest(BaseModel):
         False,
         description="Use optional 1-arcsecond / 30 meter resolution  terrain tiles instead of the default 3-arcsecond / 90 meter (default: False).",
     )
+
+    # Tower display
+    color: Optional[str] = Field(
+        None,
+        description="Hex color for this tower on the map (e.g. '#ff0000'). Auto-assigned when omitted.",
+    )

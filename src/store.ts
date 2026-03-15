@@ -27,7 +27,8 @@ const useStore = defineStore('store', {
           tx_freq: 907.0,
           tx_height: 2.0,
           tx_gain: 2.0,
-          tx_swr: 1.0
+          tx_swr: 1.0,
+          tx_color: ''
         },
         receiver: {
           rx_sensitivity: -130.0,
@@ -119,16 +120,26 @@ const useStore = defineStore('store', {
         return;
       }
 
-      const opacity = this.splatParams.display.overlay_transparency / 100;
-
       this.localSites.forEach((site: Site) => {
         if (site.raster && !site.layer) {
           const rasterLayer = new GeoRasterLayer({
             georaster: site.raster,
-            opacity: site.visible ? opacity : 0,
             noDataValue: 255,
             resolution: 256,
+            pixelValuesToColorFn: (values: number[]) => {
+              const val = values[0];
+              if (val === 255 || val === 0) return null;
+              const alpha = Math.round(230 - (val / 254) * 179);
+              const hex = site.color || '#4a90d9';
+              const r = parseInt(hex.slice(1, 3), 16);
+              const g = parseInt(hex.slice(3, 5), 16);
+              const b = parseInt(hex.slice(5, 7), 16);
+              return `rgba(${r},${g},${b},${alpha / 255})`;
+            },
           });
+          if (!site.visible) {
+            rasterLayer.setOpacity(0);
+          }
           rasterLayer.addTo(this.map as L.Map);
           site.layer = rasterLayer;
         }
@@ -144,7 +155,7 @@ const useStore = defineStore('store', {
       }
       site.visible = !site.visible;
       if (site.visible) {
-        site.layer?.setOpacity(this.splatParams.display.overlay_transparency / 100);
+        site.layer?.setOpacity(1);
       } else {
         site.layer?.setOpacity(0);
       }
@@ -233,6 +244,7 @@ const useStore = defineStore('store', {
             raster: null,
             layer: undefined,
             visible: true,
+            color: tower.color || tower.params?.transmitter?.tx_color || '#4a90d9',
           };
           this.localSites.push(site);
         }
@@ -347,12 +359,21 @@ const useStore = defineStore('store', {
               const arrayBuffer = await resultResponse.arrayBuffer();
               const geoRaster = await parseGeoraster(arrayBuffer);
 
-              const opacity = this.splatParams.display.overlay_transparency / 100;
+              const siteColor = this.splatParams.transmitter.tx_color || '#4a90d9';
               const rasterLayer = new GeoRasterLayer({
                 georaster: geoRaster,
-                opacity,
                 noDataValue: 255,
                 resolution: 256,
+                pixelValuesToColorFn: (values: number[]) => {
+                  const val = values[0];
+                  if (val === 255 || val === 0) return null;
+                  const alpha = Math.round(230 - (val / 254) * 179);
+                  const hex = siteColor;
+                  const r = parseInt(hex.slice(1, 3), 16);
+                  const g = parseInt(hex.slice(3, 5), 16);
+                  const b = parseInt(hex.slice(5, 7), 16);
+                  return `rgba(${r},${g},${b},${alpha / 255})`;
+                },
               });
               rasterLayer.addTo(this.map as L.Map);
               rasterLayer.bringToFront();
@@ -363,6 +384,7 @@ const useStore = defineStore('store', {
                 raster: geoRaster,
                 layer: rasterLayer,
                 visible: true,
+                color: siteColor,
               });
               this.currentMarker!.removeFrom(this.map as L.Map);
               this.splatParams.transmitter.name = await randanimalSync();

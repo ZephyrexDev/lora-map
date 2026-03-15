@@ -13,6 +13,7 @@ SCHEMA_TOWERS: str = """\
 CREATE TABLE IF NOT EXISTS towers (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    color TEXT,  -- hex color assigned to this tower (e.g. #ff0000)
     params TEXT NOT NULL,  -- JSON blob of all simulation params
     geotiff BLOB,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),

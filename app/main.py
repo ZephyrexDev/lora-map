@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_admin, router as auth_router
+from app.colors import next_tower_color
 from app.db import db_connection, init_db
 from app.db.connection import DEFAULT_DB_PATH
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
@@ -108,9 +109,15 @@ async def predict(
     tower_id: str = str(uuid4())
 
     with db_connection() as conn:
+        existing_colors: list[str] = [
+            row["color"]
+            for row in conn.execute("SELECT color FROM towers WHERE color IS NOT NULL").fetchall()
+        ]
+        color: str = payload.color if payload.color else next_tower_color(existing_colors)
+
         conn.execute(
-            "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
-            (tower_id, "Unnamed", json.dumps(payload.model_dump())),
+            "INSERT INTO towers (id, name, color, params) VALUES (?, ?, ?, ?)",
+            (tower_id, "Unnamed", color, json.dumps(payload.model_dump())),
         )
         conn.execute(
             "INSERT INTO tasks (id, tower_id, status) VALUES (?, ?, ?)",
@@ -208,13 +215,14 @@ async def list_towers() -> JSONResponse:
     """
     with db_connection() as conn:
         rows = conn.execute(
-            "SELECT id, name, params, created_at, updated_at FROM towers"
+            "SELECT id, name, color, params, created_at, updated_at FROM towers"
         ).fetchall()
 
     towers: list[dict[str, Any]] = [
         {
             "id": row["id"],
             "name": row["name"],
+            "color": row["color"],
             "params": json.loads(row["params"]),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],

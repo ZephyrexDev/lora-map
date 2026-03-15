@@ -2,9 +2,19 @@
 <template>
     <form novalidate>
         <div class="row g-2">
-            <div class="col-12">
+            <div class="col-8">
                 <label for="name" class="form-label">Site name</label>
                 <input v-model="transmitter.name" class="form-control form-control-sm" id="name" required data-bs-toggle="tooltip" title="Site Name" />
+            </div>
+            <div class="col-4">
+                <label for="tx_color" class="form-label">Tower Color</label>
+                <div class="d-flex align-items-center gap-1">
+                    <input v-model="transmitter.tx_color" type="color" class="form-control form-control-sm form-control-color" id="tx_color" :disabled="transmitter.tx_color === ''" title="Tower overlay color" style="width: 38px; height: 31px;" />
+                    <div class="form-check form-check-inline mb-0">
+                        <input class="form-check-input" type="checkbox" id="tx_color_auto" :checked="transmitter.tx_color === ''" @change="toggleAutoColor" />
+                        <label class="form-check-label small" for="tx_color_auto">Auto</label>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="row g-2">
@@ -165,6 +175,14 @@
         const preset = HEIGHT_PRESETS[selectedHeight.value];
         if (!preset) return;
         transmitter.tx_height = preset.height_m;
+    }
+
+    function toggleAutoColor() {
+        if (transmitter.tx_color === '') {
+            transmitter.tx_color = '#4a90d9';
+        } else {
+            transmitter.tx_color = '';
+        }
     }
 
     const centerMapOnTransmitter = () => {

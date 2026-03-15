@@ -77,19 +77,35 @@
 
 ## 8. Pre-cached client simulation matrix
 
-Towers have fixed hardware/antenna/height configs set by admin. The matrix varies the **client (receiver)** side — showing "what coverage does a visitor with client hardware X and antenna Y see from this tower?"
+Towers have fixed hardware/antenna/height configs set by admin. The matrix varies the **client (receiver)** side — showing "what coverage does a visitor with client hardware X and antenna Y see from this tower?" Each axis of the matrix is admin-configurable: the admin enables/disables individual members per axis, and only the enabled combinations are simulated. This keeps compute time manageable while allowing full flexibility.
 
-- [ ] Define client simulation matrix: client hardware (V3, V4) × client antenna (4 options) × terrain model (3 modes) = 24 receiver/terrain configurations per tower
+### Matrix axes (all toggled by admin)
+- **Client hardware** — e.g., Heltec V3, Heltec V4, Custom. Admin enables which hardware options visitors can select.
+- **Client antenna** — e.g., Ribbed Spring Helical, Duck Stubby, Bingfu Whip, Slinkdsco Omni. Admin enables which antennas to simulate.
+- **Terrain model** — Bare-earth SRTM, DSM, LULC-burned clutter. Admin enables which terrain modes are available.
+- Total simulations per tower = enabled hardware × enabled antennas × enabled terrain models (e.g., 2 × 3 × 2 = 12 instead of full 2 × 4 × 3 = 24)
+
+### Terrain model modes
+- **Bare-earth SRTM** — existing behavior, standard 1/3-arcsecond SRTM DTM tiles from AWS Open Data
+- **DSM (Digital Surface Model)** — includes buildings and tree canopy as elevation; sources: USGS 3DEP (US), provincial LiDAR (Canada), Copernicus GLO-30 DSM. SPLAT! treats surface features as terrain that naturally blocks signals — no code changes to the propagation model
+- **LULC-burned clutter** — SRTM bare-earth tiles with per-pixel clutter heights added from ESA WorldCover (10m, global, free). Land cover classes map to clutter heights (e.g., forest=12m, suburban=8m, urban=20m, cropland=0m, water=0m). Synthetic but global coverage with no DSM gaps
+
+### Admin matrix configuration
+- [ ] Store enabled matrix members in SQLite settings table (or JSON column): `{"hardware": ["v3", "v4"], "antennas": ["bingfu_whip", "slinkdsco_omni"], "terrain": ["bare_earth", "lulc_clutter"]}`
+- [ ] Add admin UI panel to toggle individual members on each axis (checkboxes per hardware, antenna, terrain model)
+- [ ] Changing the enabled set triggers delta computation: queue only the new combinations, don't re-run existing ones
+- [ ] Disabling a member hides it from the visitor selector but retains cached results (can be re-enabled without re-simulating)
+
+### Simulation & storage
 - [ ] Matrix varies receiver gain, sensitivity, SWR mismatch loss, and terrain model — tower TX params stay fixed
-- [ ] Three terrain model modes per simulation:
-  - **Bare-earth SRTM** — existing behavior, standard 1/3-arcsecond SRTM DTM tiles from AWS Open Data
-  - **DSM (Digital Surface Model)** — includes buildings and tree canopy as elevation; sources: USGS 3DEP (US), provincial LiDAR (Canada), Copernicus GLO-30 DSM. SPLAT! treats surface features as terrain that naturally blocks signals — no code changes to the propagation model
-  - **LULC-burned clutter** — SRTM bare-earth tiles with per-pixel clutter heights added from ESA WorldCover (10m, global, free). Land cover classes map to clutter heights (e.g., forest=12m, suburban=8m, urban=20m, cropland=0m, water=0m). Synthetic but global coverage with no DSM gaps
 - [ ] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower
 - [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna + terrain_model
-- [ ] Add UI selector for visitors to pick their client hardware + antenna + terrain model and instantly see the matching cached coverage layer
-- [ ] On tower creation, auto-queue the full client matrix as background tasks
-- [ ] Show matrix completion progress in admin UI
+- [ ] On tower creation, auto-queue the enabled matrix combinations as background tasks
+- [ ] Show matrix completion progress in admin UI (e.g., "8/12 simulations complete")
+
+### Visitor UI
+- [ ] Add selectors for visitors to pick their client hardware + antenna + terrain model — only enabled options shown
+- [ ] Instantly display the matching cached coverage layer (no simulation round-trip for visitors)
 
 ## 9. Frontend performance refactors (`src/store.ts`)
 
