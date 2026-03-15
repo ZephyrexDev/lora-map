@@ -52,6 +52,7 @@ def _reset_db():
         conn.execute("DELETE FROM tasks")
         conn.execute("DELETE FROM tower_paths")
         conn.execute("DELETE FROM towers")
+        conn.execute("DELETE FROM settings")
         conn.commit()
     yield
 

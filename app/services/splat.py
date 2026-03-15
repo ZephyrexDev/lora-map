@@ -509,24 +509,123 @@ class Splat:
 
 
     @staticmethod
+    def _build_dcf_color_to_dbm_lut(
+        colormap_name: str, min_dbm: float, max_dbm: float, n_levels: int = 32
+    ) -> list[tuple[np.ndarray, float]]:
+        """Build a lookup table mapping DCF RGB colors to their midpoint dBm values.
+
+        The DCF file we generate uses *n_levels* evenly-spaced dBm thresholds
+        between max_dbm and min_dbm.  SPLAT! paints each pixel with the color
+        whose threshold bracket contains the predicted signal level.  This
+        method returns a list of (rgb_array, dbm_midpoint) tuples so we can
+        reverse-map PPM pixel colors back to approximate dBm values.
+
+        Returns:
+            A list of (rgb[3], dbm_midpoint) pairs, one per DCF level.
+        """
+        rgb_colors = Splat._colormap_to_rgb(colormap_name, min_dbm, max_dbm, n_levels)
+        # DCF thresholds go from max_dbm down to min_dbm (same order as _create_splat_dcf)
+        thresholds = np.linspace(max_dbm, min_dbm, n_levels)
+
+        lut: list[tuple[np.ndarray, float]] = []
+        for i, (threshold, rgb) in enumerate(zip(thresholds, rgb_colors[::-1])):
+            # Determine the midpoint of this contour bracket
+            if i == 0:
+                # Strongest signal bracket: midpoint between max_dbm and next threshold
+                mid = (max_dbm + thresholds[1]) / 2.0 if n_levels > 1 else max_dbm
+            elif i == n_levels - 1:
+                # Weakest signal bracket: midpoint between previous threshold and min_dbm
+                mid = (thresholds[-2] + min_dbm) / 2.0
+            else:
+                mid = (thresholds[i - 1] + thresholds[i]) / 2.0
+            lut.append((np.array(rgb[:3], dtype=np.uint8), float(mid)))
+
+        return lut
+
+    @staticmethod
+    def _reverse_map_ppm_to_dbm(
+        img_rgb: np.ndarray,
+        colormap_name: str,
+        min_dbm: float,
+        max_dbm: float,
+    ) -> np.ndarray:
+        """Convert a SPLAT! PPM (RGB) image to a float32 array of dBm values.
+
+        Each pixel in the PPM is colored according to the DCF we generated.
+        We find the closest DCF color for every pixel and assign the
+        corresponding dBm midpoint value.  Pixels that don't match any DCF
+        color (background / no-signal areas) are set to NaN (nodata).
+
+        Args:
+            img_rgb: (H, W, 3) uint8 array of the PPM image in RGB.
+            colormap_name: Matplotlib colormap name used to create the DCF.
+            min_dbm: Minimum dBm value used in the DCF.
+            max_dbm: Maximum dBm value used in the DCF.
+
+        Returns:
+            (H, W) float32 array with dBm values; NaN for no-data pixels.
+        """
+        lut = Splat._build_dcf_color_to_dbm_lut(colormap_name, min_dbm, max_dbm)
+
+        height, width = img_rgb.shape[:2]
+        dbm_array = np.full((height, width), np.nan, dtype=np.float32)
+
+        # Stack DCF colors into an (N, 3) array for vectorized distance calculation
+        dcf_colors = np.array([entry[0] for entry in lut], dtype=np.float32)  # (N, 3)
+        dcf_dbm = np.array([entry[1] for entry in lut], dtype=np.float32)    # (N,)
+
+        # Reshape image to (H*W, 3) for vectorized comparison
+        pixels = img_rgb.reshape(-1, 3).astype(np.float32)  # (H*W, 3)
+
+        # Compute squared Euclidean distance from each pixel to each DCF color
+        # pixels: (H*W, 1, 3), dcf_colors: (1, N, 3)
+        diffs = pixels[:, np.newaxis, :] - dcf_colors[np.newaxis, :, :]  # (H*W, N, 3)
+        distances = np.sum(diffs ** 2, axis=2)  # (H*W, N)
+
+        # Find closest DCF color for each pixel
+        best_idx = np.argmin(distances, axis=1)  # (H*W,)
+        best_dist = distances[np.arange(len(best_idx)), best_idx]  # (H*W,)
+
+        # Assign dBm values; pixels far from any DCF color are background/nodata.
+        # A threshold of 50^2 = 2500 allows some tolerance for SPLAT!'s anti-aliasing
+        # while rejecting clearly non-signal colors (white/black backgrounds).
+        DIST_THRESHOLD = 2500
+        signal_mask = best_dist < DIST_THRESHOLD
+        flat_dbm = np.where(signal_mask, dcf_dbm[best_idx], np.nan)
+        dbm_array = flat_dbm.reshape(height, width)
+
+        n_signal = int(np.sum(signal_mask))
+        logger.debug(
+            f"Reverse-mapped {n_signal}/{height * width} pixels to dBm values "
+            f"(range {np.nanmin(dbm_array):.1f} to {np.nanmax(dbm_array):.1f} dBm)"
+        )
+
+        return dbm_array
+
+    @staticmethod
     def _create_splat_geotiff(
             ppm_bytes: bytes,
             kml_bytes: bytes,
             colormap_name: str,
             min_dbm: float,
             max_dbm: float,
-            null_value: int = 255  # Define the null value for transparency
+            null_value: int = 255  # kept for API compat, unused in new path
     ) -> bytes:
         """
-        Generate GeoTIFF file content from SPLAT! PPM and KML data, with transparency for null areas.
+        Generate a single-band float32 GeoTIFF containing dBm signal strength
+        values from SPLAT! PPM and KML data.
+
+        Each pixel in the output GeoTIFF contains the predicted signal strength
+        in dBm (e.g. -130.0 to -60.0).  No-coverage pixels are set to NaN
+        (IEEE 754 float NaN used as the nodata sentinel).
 
         Args:
-            ppm_bytes (bytes): Binary content of the SPLAT-generated PPM file.
-            kml_bytes (bytes): Binary content of the KML file containing geospatial bounds.
-            colormap_name (str): Name of the matplotlib colormap to use for the GeoTIFF.
-            min_dbm (float): Minimum dBm value for the colormap scale.
-            max_dbm (float): Maximum dBm value for the colormap scale.
-            null_value (int): Pixel value in the PPM that represents null areas. Defaults to 255.
+            ppm_bytes: Binary content of the SPLAT-generated PPM file.
+            kml_bytes: Binary content of the KML file containing geospatial bounds.
+            colormap_name: Matplotlib colormap name used when generating the DCF.
+            min_dbm: Minimum dBm value used in the DCF / colormap.
+            max_dbm: Maximum dBm value used in the DCF / colormap.
+            null_value: (Unused, kept for backward compatibility.)
 
         Returns:
             bytes: The binary content of the resulting GeoTIFF file.
@@ -534,7 +633,7 @@ class Splat:
         Raises:
             RuntimeError: If the conversion process fails.
         """
-        logger.info("Starting GeoTIFF generation from SPLAT! PPM and KML data.")
+        logger.info("Starting dBm GeoTIFF generation from SPLAT! PPM and KML data.")
 
         try:
             # Parse KML and extract bounding box
@@ -552,32 +651,24 @@ class Splat:
                 f"Extracted bounding box: north={north}, south={south}, east={east}, west={west}"
             )
 
-            # Read PPM content
-            logger.debug("Reading PPM content.")
+            # Read PPM content as RGB (not grayscale — we need colors for reverse mapping)
+            logger.debug("Reading PPM content as RGB.")
             with Image.open(io.BytesIO(ppm_bytes)) as img:
-                img_array = np.array(
-                    img.convert("L")
-                )  # Convert to single-channel grayscale
-                img_array = np.clip(img_array, 0, 255).astype("uint8")
+                img_rgb = np.array(img.convert("RGB"))  # (H, W, 3) uint8
 
-            logger.debug(f"PPM image dimensions: {img_array.shape}")
+            logger.debug(f"PPM image dimensions: {img_rgb.shape}")
 
-            # Mask null values
-            img_array = np.where(img_array == null_value, 255, img_array)  # Optionally set to 0
-            no_data_value = null_value
+            # Reverse-map PPM pixel colors to dBm values
+            dbm_array = Splat._reverse_map_ppm_to_dbm(
+                img_rgb, colormap_name, min_dbm, max_dbm
+            )
 
             # Create GeoTIFF using Rasterio
-            height, width = img_array.shape
+            height, width = dbm_array.shape
             transform = from_bounds(west, south, east, north, width, height)
             logger.debug(f"GeoTIFF transform matrix: {transform}")
 
-            # Generate colormap with transparency
-            rgb_colors = Splat._colormap_to_rgb(colormap_name, min_dbm, max_dbm, 255)
-
-            # Initialize GDAL-compatible colormap with transparency for null values
-            gdal_colormap = {i: tuple(rgb) + (255,) for i, rgb in enumerate(rgb_colors)}
-
-            # Write GeoTIFF to memory
+            # Write single-band float32 GeoTIFF to memory
             with io.BytesIO() as buffer:
                 with rasterio.open(
                         buffer,
@@ -585,21 +676,19 @@ class Splat:
                         driver="GTiff",
                         height=height,
                         width=width,
-                        count=1,  # Single-band data
-                        dtype="uint8",
+                        count=1,
+                        dtype="float32",
                         crs="EPSG:4326",
                         transform=transform,
-                        photometric="palette",  # Colormap interpretation
                         compress="lzw",
-                        nodata=no_data_value,  # Set NoData value
+                        nodata=float("nan"),
                 ) as dst:
-                    dst.write(img_array, 1)  # Write the raster data
-                    dst.write_colormap(1, gdal_colormap)  # Attach the colormap
+                    dst.write(dbm_array, 1)
 
                 buffer.seek(0)
                 geotiff_bytes = buffer.read()
 
-            logger.info("GeoTIFF generation successful.")
+            logger.info("dBm GeoTIFF generation successful.")
             return geotiff_bytes
 
         except Exception as e:

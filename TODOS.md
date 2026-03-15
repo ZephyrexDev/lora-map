@@ -134,10 +134,10 @@ Each tower gets a user-assigned color. Coverage is rendered as that solid color 
 Where multiple towers overlap, the area uses cross-hatched line shading — each tower's lines drawn in its color, with line thickness proportional to that tower's signal strength (stronger signal = thicker lines).
 
 ### Phase 1 — Per-tower solid color rendering
-- [ ] Add `color` field to towers table (hex string, e.g., "#ff0000") and Site/SplatParams types
-- [ ] Add color picker to tower creation form (admin), cycling through a 24-color palette: all permutations of `{0, 128, 255}` on R, G, B excluding greyscale `(0,0,0)`, `(128,128,128)`, `(255,255,255)`
-- [ ] Replace matplotlib colormap rendering with single-color + alpha: use `pixelValuesToColorFn` on GeoRasterLayer to map dBm → alpha on the tower's color
-- [ ] Alpha mapping: 10% transparency (alpha ≈ 230) at `signal_threshold` (minimum receivable), linearly scaling to 80% transparency (alpha ≈ 51) at max dBm (perfect reception). Pixels below threshold get alpha 0 (fully transparent / no coverage).
+- [x] Add `color` field to towers table (hex string, e.g., "#ff0000") and Site/SplatParams types
+- [x] Add color picker to tower creation form (admin), cycling through a 24-color palette: all permutations of `{0, 128, 255}` on R, G, B excluding greyscale `(0,0,0)`, `(128,128,128)`, `(255,255,255)`
+- [x] Replace matplotlib colormap rendering with single-color + alpha: use `pixelValuesToColorFn` on GeoRasterLayer to map dBm → alpha on the tower's color
+- [x] Alpha mapping: 10% transparency (alpha ≈ 230) at `signal_threshold` (minimum receivable), linearly scaling to 80% transparency (alpha ≈ 51) at max dBm (perfect reception). Pixels below threshold get alpha 0 (fully transparent / no coverage).
 - [ ] Backend: generate "raw dBm" GeoTIFFs (no colormap baked in) so frontend controls visualization
 - [ ] Store raw dBm GeoTIFFs — colormap is now a frontend concern, not baked into the raster
 

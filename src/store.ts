@@ -6,7 +6,7 @@ import GeoRasterLayer from 'georaster-layer-for-leaflet';
 import parseGeoraster from 'georaster';
 import 'leaflet-easyprint';
 import { type Site, type SplatParams } from './types.ts';
-import { cloneObject } from './utils.ts';
+import { cloneObject, dbmToRgba } from './utils.ts';
 import { redPinMarker } from './layers.ts';
 
 const useStore = defineStore('store', {
@@ -122,20 +122,14 @@ const useStore = defineStore('store', {
 
       this.localSites.forEach((site: Site) => {
         if (site.raster && !site.layer) {
+          const minDbm = site.params?.display?.min_dbm ?? -130;
+          const maxDbm = site.params?.display?.max_dbm ?? -80;
+          const hex = site.color || '#4a90d9';
           const rasterLayer = new GeoRasterLayer({
             georaster: site.raster,
-            noDataValue: 255,
             resolution: 256,
-            pixelValuesToColorFn: (values: number[]) => {
-              const val = values[0];
-              if (val === 255 || val === 0) return null;
-              const alpha = Math.round(230 - (val / 254) * 179);
-              const hex = site.color || '#4a90d9';
-              const r = parseInt(hex.slice(1, 3), 16);
-              const g = parseInt(hex.slice(3, 5), 16);
-              const b = parseInt(hex.slice(5, 7), 16);
-              return `rgba(${r},${g},${b},${alpha / 255})`;
-            },
+            pixelValuesToColorFn: (values: number[]) =>
+              dbmToRgba(values[0], hex, minDbm, maxDbm),
           });
           if (!site.visible) {
             rasterLayer.setOpacity(0);
@@ -360,20 +354,13 @@ const useStore = defineStore('store', {
               const geoRaster = await parseGeoraster(arrayBuffer);
 
               const siteColor = this.splatParams.transmitter.tx_color || '#4a90d9';
+              const simMinDbm = this.splatParams.display.min_dbm;
+              const simMaxDbm = this.splatParams.display.max_dbm;
               const rasterLayer = new GeoRasterLayer({
                 georaster: geoRaster,
-                noDataValue: 255,
                 resolution: 256,
-                pixelValuesToColorFn: (values: number[]) => {
-                  const val = values[0];
-                  if (val === 255 || val === 0) return null;
-                  const alpha = Math.round(230 - (val / 254) * 179);
-                  const hex = siteColor;
-                  const r = parseInt(hex.slice(1, 3), 16);
-                  const g = parseInt(hex.slice(3, 5), 16);
-                  const b = parseInt(hex.slice(5, 7), 16);
-                  return `rgba(${r},${g},${b},${alpha / 255})`;
-                },
+                pixelValuesToColorFn: (values: number[]) =>
+                  dbmToRgba(values[0], siteColor, simMinDbm, simMaxDbm),
               });
               rasterLayer.addTo(this.map as L.Map);
               rasterLayer.bringToFront();

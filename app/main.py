@@ -31,6 +31,12 @@ from app.auth import require_admin, router as auth_router
 from app.colors import next_tower_color
 from app.db import db_connection, init_db
 from app.db.connection import DEFAULT_DB_PATH
+from app.matrix import (
+    DEFAULT_MATRIX_CONFIG,
+    get_matrix_combinations,
+    get_matrix_config,
+    set_matrix_config,
+)
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.services.splat import Splat
 
@@ -251,6 +257,70 @@ async def delete_tower(tower_id: str) -> JSONResponse:
 
     logger.info("Tower %s deleted.", tower_id)
     return JSONResponse({"message": "Tower deleted", "tower_id": tower_id})
+
+
+# ---------------------------------------------------------------------------
+# Matrix config endpoints
+# ---------------------------------------------------------------------------
+
+# Known valid values for matrix axes (used for validation on PUT).
+_KNOWN_HARDWARE = {"v3", "v4", "custom"}
+_KNOWN_ANTENNAS = {
+    "ribbed_spring_helical",
+    "duck_stubby",
+    "bingfu_whip",
+    "slinkdsco_omni",
+}
+_KNOWN_TERRAIN = {"bare_earth", "lulc_clutter"}
+
+
+@app.get("/matrix/config")
+async def get_matrix_config_endpoint() -> JSONResponse:
+    """Return the current matrix configuration."""
+    with db_connection() as conn:
+        config = get_matrix_config(conn)
+    return JSONResponse(config)
+
+
+@app.put("/matrix/config", dependencies=[Depends(require_admin)])
+async def put_matrix_config_endpoint(
+    body: dict[str, Any],
+) -> JSONResponse:
+    """Update the matrix configuration (admin-only).
+
+    Accepts a JSON body with keys ``hardware``, ``antennas``, and ``terrain``,
+    each mapping to a list of string identifiers.  All values must be from
+    the known presets.
+    """
+    errors: list[str] = []
+    for key, known in [
+        ("hardware", _KNOWN_HARDWARE),
+        ("antennas", _KNOWN_ANTENNAS),
+        ("terrain", _KNOWN_TERRAIN),
+    ]:
+        if key not in body:
+            errors.append(f"Missing required key: {key}")
+            continue
+        if not isinstance(body[key], list):
+            errors.append(f"{key} must be a list")
+            continue
+        unknown = set(body[key]) - known
+        if unknown:
+            errors.append(f"Unknown {key} values: {sorted(unknown)}")
+
+    if errors:
+        return JSONResponse({"errors": errors}, status_code=400)
+
+    config = {
+        "hardware": body["hardware"],
+        "antennas": body["antennas"],
+        "terrain": body["terrain"],
+    }
+
+    with db_connection() as conn:
+        set_matrix_config(conn, config)
+
+    return JSONResponse(config)
 
 
 app.mount("/", StaticFiles(directory="app/ui", html=True), name="ui")
