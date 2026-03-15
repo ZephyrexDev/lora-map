@@ -111,6 +111,7 @@
 </template>
 
 <script setup lang="ts">
+import { watch } from "vue";
 import { useStore } from "../store.ts";
 const store = useStore();
 const { display } = store.splatParams;
@@ -118,4 +119,12 @@ const { display } = store.splatParams;
 function onOverlapModeChange() {
   store.updateOverlapLayer();
 }
+
+watch(
+  () => display.overlay_transparency,
+  () => {
+    store.redrawSites();
+    store.updateOverlapLayer();
+  },
+);
 </script>

@@ -491,9 +491,10 @@ const useStore = defineStore("store", {
       // Add GeoRasterLayers back to the map
       this.localSites.forEach((site: Site) => {
         if (!site.visible) return;
+        const userOpacity = 1 - this.splatParams.display.overlay_transparency / 100;
         const rasterLayer = new GeoRasterLayer({
           georaster: site.raster,
-          opacity: overlapActive ? 0 : 0.7,
+          opacity: overlapActive ? 0 : userOpacity,
           noDataValue: 255,
           resolution: 256,
         });
@@ -528,12 +529,13 @@ const useStore = defineStore("store", {
       }));
 
       // Create the overlap layer
+      const overlapOpacity = 1 - this.splatParams.display.overlay_transparency / 100;
       this.overlapLayer = createOverlapHatchLayer({
         towers,
         mode: this.splatParams.display.overlapMode,
         minDbm: this.splatParams.display.min_dbm,
         maxDbm: this.splatParams.display.max_dbm,
-        opacity: 1,
+        opacity: overlapOpacity,
       });
 
       this.overlapLayer.addTo(this.map);
