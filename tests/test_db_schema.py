@@ -33,8 +33,8 @@ class TestSchemaTowerPaths:
 
 
 class TestAllSchemas:
-    def test_has_four_entries(self):
-        assert len(ALL_SCHEMAS) == 4
+    def test_has_five_entries(self):
+        assert len(ALL_SCHEMAS) == 5
 
 
 class TestInitDb:
@@ -48,6 +48,6 @@ class TestInitDb:
         try:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
             tables = sorted(row[0] for row in cursor.fetchall())
-            assert tables == ["settings", "tasks", "tower_paths", "towers"]
+            assert tables == ["settings", "simulations", "tasks", "tower_paths", "towers"]
         finally:
             conn.close()
