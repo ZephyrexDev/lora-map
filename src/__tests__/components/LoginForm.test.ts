@@ -92,7 +92,7 @@ describe("LoginForm.vue", () => {
     store.login = vi.fn().mockReturnValue(new Promise(() => {}));
     const wrapper = mountLoginForm();
     await wrapper.find("#passwordInput").setValue("test");
-    wrapper.find("form").trigger("submit");
+    await wrapper.find("form").trigger("submit");
     await wrapper.vm.$nextTick();
     expect(wrapper.find<HTMLButtonElement>("button[type='submit']").element.disabled).toBe(true);
   });

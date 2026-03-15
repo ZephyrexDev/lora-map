@@ -117,7 +117,7 @@ function startPolling() {
     clearTimeout(pollTimer);
     pollTimer = null;
   }
-  fetchProgress();
+  void fetchProgress();
 }
 
 // Watch for admin status or site list changes to start/stop polling

@@ -254,7 +254,7 @@ const useStore = defineStore("store", {
     toggleDeadzones(): void {
       this.showDeadzones = !this.showDeadzones;
       if (this.showDeadzones) {
-        this.fetchDeadzones();
+        void this.fetchDeadzones();
       } else {
         this._clearDeadzoneOverlay();
       }
@@ -426,10 +426,10 @@ const useStore = defineStore("store", {
       this.redrawSites();
       this.updateOverlapLayer();
       if (this.showDeadzones) {
-        this.fetchDeadzones();
+        void this.fetchDeadzones();
       }
       if (this.showTowerPaths) {
-        this.loadTowerPaths();
+        void this.loadTowerPaths();
       }
     },
     toggleSiteVisibility(index: number) {
@@ -574,8 +574,8 @@ const useStore = defineStore("store", {
         .addTo(this.map as L.Map)
         .bindPopup("Transmitter site");
       this.redrawSites();
-      this.loadTowers();
-      this.loadTowerPaths();
+      void this.loadTowers();
+      void this.loadTowerPaths();
     },
     async runSimulation() {
       try {
@@ -653,7 +653,7 @@ const useStore = defineStore("store", {
               // Reload tower paths after backend has time to compute
               this._pathReloadTimer = window.setTimeout(() => this.loadTowerPaths(), PATH_RELOAD_DELAY_MS);
               if (this.showDeadzones) {
-                this.fetchDeadzones();
+                void this.fetchDeadzones();
               }
             }
           } else if (statusData.status === "failed") {
@@ -666,7 +666,7 @@ const useStore = defineStore("store", {
           }
         };
 
-        pollStatus(); // Start polling
+        void pollStatus(); // Start polling
       } catch (error) {
         this.simulationState = "failed";
         this.simulationError = error instanceof Error ? error.message : "Unknown error";

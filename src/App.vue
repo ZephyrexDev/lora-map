@@ -233,7 +233,7 @@ import { useStore } from "./store.ts";
 const store = useStore();
 
 onMounted(() => {
-  store.checkAuth();
+  void store.checkAuth();
 });
 const buttonText = () => {
   if ("running" === store.simulationState) {

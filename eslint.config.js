@@ -70,6 +70,7 @@ export default [
       parserOptions: {
         parser: tsParser,
         ...typeAwareParserOptions,
+        extraFileExtensions: [".vue"],
       },
     },
     plugins: {
@@ -90,7 +91,6 @@ export default [
       "vue/no-template-shadow": "error",
       "vue/block-order": ["error", { order: ["template", "script", "style"] }],
       "vue/eqeqeq": ["error", "always"],
-      "vue/require-emit-declaration": "error",
     },
   },
 ];
