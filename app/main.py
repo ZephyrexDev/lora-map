@@ -600,22 +600,25 @@ async def list_tower_paths() -> TowerPathListResponse:
             "JOIN towers tb ON tb.id = tp.tower_b_id"
         ).fetchall()
 
-    paths = [
-        TowerPathResponse(
-            id=row["id"],
-            tower_a_id=row["tower_a_id"],
-            tower_b_id=row["tower_b_id"],
-            lat_a=json.loads(row["params_a"]).get("lat", 0),
-            lon_a=json.loads(row["params_a"]).get("lon", 0),
-            lat_b=json.loads(row["params_b"]).get("lat", 0),
-            lon_b=json.loads(row["params_b"]).get("lon", 0),
-            path_loss_db=row["path_loss_db"],
-            has_los=bool(row["has_los"]) if row["has_los"] is not None else None,
-            distance_km=row["distance_km"],
-            created_at=row["created_at"],
+    paths = []
+    for row in rows:
+        pa = json.loads(row["params_a"])
+        pb = json.loads(row["params_b"])
+        paths.append(
+            TowerPathResponse(
+                id=row["id"],
+                tower_a_id=row["tower_a_id"],
+                tower_b_id=row["tower_b_id"],
+                lat_a=pa.get("lat", 0),
+                lon_a=pa.get("lon", 0),
+                lat_b=pb.get("lat", 0),
+                lon_b=pb.get("lon", 0),
+                path_loss_db=row["path_loss_db"],
+                has_los=bool(row["has_los"]) if row["has_los"] is not None else None,
+                distance_km=row["distance_km"],
+                created_at=row["created_at"],
+            )
         )
-        for row in rows
-    ]
     return TowerPathListResponse(paths=paths)
 
 

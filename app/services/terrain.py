@@ -88,9 +88,6 @@ class SrtmProvider(TerrainProvider):
     BUCKET = "elevation-tiles-prod"
     PREFIX = "v2/skadi"
 
-    def __init__(self, s3: boto3.client, tile_cache: Cache) -> None:
-        super().__init__(s3, tile_cache)
-
     def get_tile(self, tile_name: str) -> bytes:
         cache_key = f"srtm:{tile_name}"
         if cache_key in self.tile_cache:

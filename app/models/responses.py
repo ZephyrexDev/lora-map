@@ -118,7 +118,3 @@ class ComputePathsResponse(BaseModel):
 class DeleteResponse(BaseModel):
     message: str
     id: str
-
-
-class ErrorResponse(BaseModel):
-    error: str

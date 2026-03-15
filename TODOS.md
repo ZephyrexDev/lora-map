@@ -245,6 +245,11 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] `get_matrix_config` / `set_matrix_config` use `dict[str, list[str]]` — use `MatrixConfigRequest` model
 - [x] `_KNOWN_HARDWARE` / `_KNOWN_ANTENNAS` duplicate keys from `HARDWARE_RX_PARAMS` / `ANTENNA_RX_PARAMS` — derive from source data
 
+### Cleanup (round 3)
+- [x] Remove unused `ErrorResponse` from `responses.py`
+- [x] `list_tower_paths` parses `json.loads()` 4× per row — parse once per params blob
+- [x] Remove redundant `SrtmProvider.__init__` that only calls `super().__init__()`
+
 ## 16. Mobile / responsive design
 
 ### Critical
