@@ -121,6 +121,6 @@ class TestInitDbIdempotent:
                 "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
             ).fetchall()
             table_names = sorted(row[0] for row in tables)
-            assert table_names == ["tasks", "tower_paths", "towers"]
+            assert table_names == ["settings", "tasks", "tower_paths", "towers"]
         finally:
             conn.close()
