@@ -307,3 +307,8 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] ClientSelector has terrain model selector — visitors can switch between terrain modes
 - [x] Failed simulation error message surfaced in UI alert below Run Simulation button
 - [x] `GET /towers/{tower_id}/aggregate` called when visitor selects `weighted_aggregate` terrain
+
+### Round 4 — Minor
+- [x] Add `text-break` to simulation error alert to prevent horizontal overflow on narrow screens
+- [x] Add `form-control-sm` to LoginForm password input for consistency and prevent iOS auto-zoom
+- [x] Add `mb-2` to ClientSelector terrain row for consistent spacing with pending message visibility

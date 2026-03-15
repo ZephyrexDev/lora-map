@@ -17,7 +17,7 @@
                   id="passwordInput"
                   v-model="password"
                   type="password"
-                  class="form-control"
+                  class="form-control form-control-sm"
                   placeholder="Enter admin password"
                   autocomplete="current-password"
                 />

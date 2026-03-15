@@ -28,7 +28,7 @@
         </select>
       </div>
     </div>
-    <div class="row g-2 mt-1">
+    <div class="row g-2 mt-1 mb-2">
       <div class="col-12">
         <label for="client-terrain" class="form-label small mb-1">Terrain Model</label>
         <select

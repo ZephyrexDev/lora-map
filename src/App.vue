@@ -188,7 +188,7 @@
                 </div>
                 <div
                   v-if="store.simulationState === 'failed' && store.simulationError"
-                  class="alert alert-danger py-1 px-2 mt-2 mb-0 small"
+                  class="alert alert-danger py-1 px-2 mt-2 mb-0 small text-break"
                 >
                   {{ store.simulationError }}
                 </div>
