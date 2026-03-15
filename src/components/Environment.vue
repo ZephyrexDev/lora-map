@@ -26,7 +26,7 @@
         <label for="clutter_height" class="form-label">Clutter Height (m)</label>
         <input
           id="clutter_height"
-          v-model="environment.clutter_height"
+          v-model.number="environment.clutter_height"
           type="number"
           class="form-control form-control-sm"
           required
@@ -39,7 +39,7 @@
         <label for="ground_dielectric" class="form-label">Ground Dielectric (V/m)</label>
         <input
           id="ground_dielectric"
-          v-model="environment.ground_dielectric"
+          v-model.number="environment.ground_dielectric"
           type="number"
           class="form-control form-control-sm"
           required
@@ -52,7 +52,7 @@
         <label for="ground_conductivity" class="form-label">Ground Conductivity (S/m)</label>
         <input
           id="ground_conductivity"
-          v-model="environment.ground_conductivity"
+          v-model.number="environment.ground_conductivity"
           type="number"
           class="form-control form-control-sm"
           required
@@ -65,7 +65,7 @@
         <label for="atmosphere_bending" class="form-label">Atmospheric Bending (N-units)</label>
         <input
           id="atmosphere_bending"
-          v-model="environment.atmosphere_bending"
+          v-model.number="environment.atmosphere_bending"
           type="number"
           class="form-control form-control-sm"
           required
@@ -80,5 +80,5 @@
 
 <script setup lang="ts">
 import { useStore } from "../store.ts";
-const {environment} = useStore().splatParams;
+const { environment } = useStore().splatParams;
 </script>

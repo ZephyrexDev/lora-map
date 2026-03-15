@@ -5,7 +5,7 @@
         <label for="situation_fraction" class="form-label">Situation Fraction (%)</label>
         <input
           id="situation_fraction"
-          v-model="simulation.situation_fraction"
+          v-model.number="simulation.situation_fraction"
           type="number"
           class="form-control form-control-sm"
           required
@@ -19,7 +19,7 @@
         <label for="time_fraction" class="form-label">Time Fraction (%)</label>
         <input
           id="time_fraction"
-          v-model="simulation.time_fraction"
+          v-model.number="simulation.time_fraction"
           type="number"
           class="form-control form-control-sm"
           required
@@ -35,7 +35,7 @@
         <label for="simulation_extent" class="form-label">Max Range (km)</label>
         <input
           id="simulation_extent"
-          v-model="simulation.simulation_extent"
+          v-model.number="simulation.simulation_extent"
           type="number"
           class="form-control form-control-sm"
           required
@@ -51,5 +51,5 @@
 
 <script setup lang="ts">
 import { useStore } from "../store.ts";
-const {simulation} = useStore().splatParams;
+const { simulation } = useStore().splatParams;
 </script>

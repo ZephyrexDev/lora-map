@@ -5,7 +5,7 @@
         <label for="min_dbm" class="form-label">Minimum dBm</label>
         <input
           id="min_dbm"
-          v-model="display.min_dbm"
+          v-model.number="display.min_dbm"
           type="number"
           class="form-control form-control-sm"
           required
@@ -17,7 +17,7 @@
         <label for="max_dbm" class="form-label">Maximum dBm</label>
         <input
           id="max_dbm"
-          v-model="display.max_dbm"
+          v-model.number="display.max_dbm"
           type="number"
           class="form-control form-control-sm"
           required
@@ -43,7 +43,7 @@
         <label for="overlay_transparency" class="form-label">Transparency (%)</label>
         <input
           id="overlay_transparency"
-          v-model="display.overlay_transparency"
+          v-model.number="display.overlay_transparency"
           type="number"
           class="form-control form-control-sm"
           required
@@ -113,7 +113,7 @@
 <script setup lang="ts">
 import { useStore } from "../store.ts";
 const store = useStore();
-const {display} = store.splatParams;
+const { display } = store.splatParams;
 
 function onOverlapModeChange() {
   store.updateOverlapLayer();

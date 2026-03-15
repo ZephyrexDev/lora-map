@@ -5,7 +5,7 @@
         <label for="rx_sensitivity" class="form-label">Sensitivity (dBm)</label>
         <input
           id="rx_sensitivity"
-          v-model="receiver.rx_sensitivity"
+          v-model.number="receiver.rx_sensitivity"
           type="number"
           class="form-control form-control-sm"
           required
@@ -19,7 +19,7 @@
         <label for="rx_height" class="form-label">Height AGL (m)</label>
         <input
           id="rx_height"
-          v-model="receiver.rx_height"
+          v-model.number="receiver.rx_height"
           type="number"
           class="form-control form-control-sm"
           required
@@ -34,7 +34,7 @@
         <label for="rx_gain" class="form-label">Antenna Gain (dB)</label>
         <input
           id="rx_gain"
-          v-model="receiver.rx_gain"
+          v-model.number="receiver.rx_gain"
           type="number"
           class="form-control form-control-sm"
           required
@@ -48,7 +48,7 @@
         <label for="rx_loss" class="form-label">Cable Loss (dB)</label>
         <input
           id="rx_loss"
-          v-model="receiver.rx_loss"
+          v-model.number="receiver.rx_loss"
           type="number"
           class="form-control form-control-sm"
           required
@@ -64,5 +64,5 @@
 
 <script setup lang="ts">
 import { useStore } from "../store.ts";
-const {receiver} = useStore().splatParams;
+const { receiver } = useStore().splatParams;
 </script>

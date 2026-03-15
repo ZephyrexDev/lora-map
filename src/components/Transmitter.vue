@@ -42,7 +42,7 @@
         <label for="tx_lat" class="form-label">Latitude (degrees)</label>
         <input
           id="tx_lat"
-          v-model="transmitter.tx_lat"
+          v-model.number="transmitter.tx_lat"
           type="number"
           class="form-control form-control-sm"
           required
@@ -58,7 +58,7 @@
         <label for="tx_lon" class="form-label">Longitude (degrees)</label>
         <input
           id="tx_lon"
-          v-model="transmitter.tx_lon"
+          v-model.number="transmitter.tx_lon"
           type="number"
           class="form-control form-control-sm"
           required
@@ -149,7 +149,7 @@
         <label for="tx_power" class="form-label">Power (W)</label>
         <input
           id="tx_power"
-          v-model="transmitter.tx_power"
+          v-model.number="transmitter.tx_power"
           type="number"
           class="form-control form-control-sm"
           required
@@ -165,7 +165,7 @@
         <label for="frequency" class="form-label">Frequency (MHz)</label>
         <input
           id="tx_freq"
-          v-model="transmitter.tx_freq"
+          v-model.number="transmitter.tx_freq"
           type="number"
           class="form-control form-control-sm"
           required
@@ -184,7 +184,7 @@
         <label for="tx_height" class="form-label">Height AGL (m)</label>
         <input
           id="tx_height"
-          v-model="transmitter.tx_height"
+          v-model.number="transmitter.tx_height"
           type="number"
           class="form-control form-control-sm"
           required
@@ -200,7 +200,7 @@
         <label for="tx_gain" class="form-label">Antenna Gain (dB)</label>
         <input
           id="tx_gain"
-          v-model="transmitter.tx_gain"
+          v-model.number="transmitter.tx_gain"
           type="number"
           class="form-control form-control-sm"
           required
