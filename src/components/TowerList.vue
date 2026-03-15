@@ -46,6 +46,11 @@
         </span>
       </li>
     </ul>
+    <div v-else-if="store.towersLoading" class="text-muted small mb-0">Loading towers...</div>
+    <div v-else-if="store.towersError" class="text-danger small mb-0">
+      {{ store.towersError }}
+      <button type="button" class="btn btn-sm btn-link p-0 ms-1" @click="() => store.loadTowers()">Retry</button>
+    </div>
     <p v-else class="text-muted small mb-0">No towers</p>
     <div v-if="store.localSites.length >= 2" class="mt-2">
       <button

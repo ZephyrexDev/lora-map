@@ -48,6 +48,8 @@ const useStore = defineStore("store", {
       deadzoneAnalysis: null as DeadzoneAnalysis | null,
       deadzoneLayer: null as DeadzoneCanvasLayer | null,
       suggestionMarkers: [] as L.Marker[],
+      towersLoading: false,
+      towersError: "" as string,
       _pathReloadTimer: 0 as number,
       _pollTimer: 0 as number,
       matrixConfig: null as MatrixConfig | null,
@@ -93,9 +95,14 @@ const useStore = defineStore("store", {
   },
   actions: {
     async loadTowers(): Promise<void> {
+      this.towersLoading = true;
+      this.towersError = "";
       try {
         const response = await fetch("/towers");
-        if (!response.ok) return;
+        if (!response.ok) {
+          this.towersError = "Failed to load towers";
+          return;
+        }
         const data = await response.json();
         const towers: { id: string; name: string; color: string | null; params: Record<string, unknown> }[] =
           data.towers ?? [];
@@ -156,6 +163,9 @@ const useStore = defineStore("store", {
         }
       } catch (err) {
         console.warn("Error loading towers:", err);
+        this.towersError = "Failed to load towers";
+      } finally {
+        this.towersLoading = false;
       }
     },
     async loadMatrixConfig(): Promise<void> {
