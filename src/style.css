@@ -12,5 +12,20 @@ body {
 }
 
 .spinner-border-sm {
-    margin-right: 0.5rem; /* Optional: Add spacing between spinner and text */
+    margin-right: 0.5rem;
+}
+
+@media (max-width: 575.98px) {
+  .offcanvas.show {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .navbar-brand {
+    max-width: calc(100vw - 120px);
+  }
+
+  .row.g-2 > [class*="col-"] {
+    margin-bottom: 0.25rem;
+  }
 }

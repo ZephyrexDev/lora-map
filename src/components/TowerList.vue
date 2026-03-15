@@ -4,7 +4,7 @@
       <li
         v-for="(site, index) in store.localSites"
         :key="site.taskId"
-        class="list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2"
+        class="list-group-item list-group-item-dark d-flex flex-wrap justify-content-between align-items-center py-1 px-2 gap-1"
       >
         <span class="text-truncate me-2" :class="{ 'text-muted': !site.visible }">
           <span

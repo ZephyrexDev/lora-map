@@ -2,11 +2,11 @@
   <div>
     <nav class="navbar navbar-dark bg-dark fixed-top">
       <div class="container-fluid">
-        <a class="navbar-brand" href="#">
+        <a class="navbar-brand text-truncate" href="#">
           <img src="/logo.svg" alt="LoRa Mesh Logo" width="30" height="30" class="d-inline" />
           LoRa Coverage Planner
         </a>
-        <div class="d-flex align-items-center">
+        <div class="d-flex align-items-center flex-shrink-0">
           <button
             class="btn btn-sm me-2"
             :class="store.isAdmin ? 'btn-outline-success' : 'btn-outline-secondary'"

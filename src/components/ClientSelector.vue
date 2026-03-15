@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="row g-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="client-hardware" class="form-label small mb-1">Your Hardware</label>
         <select
           id="client-hardware"
@@ -14,7 +14,7 @@
           </option>
         </select>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="client-antenna" class="form-label small mb-1">Your Antenna</label>
         <select
           id="client-antenna"

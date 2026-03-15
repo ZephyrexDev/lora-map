@@ -1,7 +1,7 @@
 <template>
   <form novalidate>
     <div class="row g-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="rx_sensitivity" class="form-label">Sensitivity (dBm)</label>
         <input
           id="rx_sensitivity"
@@ -15,7 +15,7 @@
         />
         <div class="invalid-feedback">Please enter a valid sensitivity.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="rx_height" class="form-label">Height AGL (m)</label>
         <input
           id="rx_height"
@@ -30,7 +30,7 @@
       </div>
     </div>
     <div class="row g-2 mt-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="rx_gain" class="form-label">Antenna Gain (dB)</label>
         <input
           id="rx_gain"
@@ -44,7 +44,7 @@
         />
         <div class="invalid-feedback">Gain must be a positive number.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="rx_loss" class="form-label">Cable Loss (dB)</label>
         <input
           id="rx_loss"

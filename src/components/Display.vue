@@ -1,7 +1,7 @@
 <template>
   <form novalidate>
     <div class="row g-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="min_dbm" class="form-label">Minimum dBm</label>
         <input
           v-model="display.min_dbm"
@@ -13,7 +13,7 @@
         />
         <div class="invalid-feedback">Minimum dBm must be provided (default: -130.0).</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="max_dbm" class="form-label">Maximum dBm</label>
         <input
           v-model="display.max_dbm"
@@ -27,7 +27,7 @@
       </div>
     </div>
     <div class="row g-2 mt-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="color_scale" class="form-label">Color Scale</label>
         <select v-model="display.color_scale" id="color_scale" class="form-select form-select-sm" required>
           <option value="plasma" selected>Plasma</option>
@@ -39,7 +39,7 @@
         </select>
         <div class="invalid-feedback">Please select a color scale.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="overlay_transparency" class="form-label">Transparency (%)</label>
         <input
           v-model="display.overlay_transparency"
@@ -73,9 +73,7 @@
         <img
           :src="`/colormaps/${display.color_scale}.png`"
           alt="Colorbar"
-          width="256"
-          height="30"
-          style="border: 1px solid #ccc; display: block; margin: 0 auto"
+          style="border: 1px solid #ccc; display: block; margin: 0 auto; max-width: 100%; height: auto"
         />
       </div>
       <div class="d-flex justify-content-between mt-1">

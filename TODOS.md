@@ -225,15 +225,15 @@ A fourth virtual terrain model that blends the three real models into a single c
 ## 15. Mobile / responsive design
 
 ### Critical
-- [ ] Add responsive breakpoints to all form columns (`col-12 col-sm-6` instead of fixed `col-6`) across Transmitter, Receiver, Environment, Simulation, Display components
-- [ ] Remove hardcoded `width: 38px; height: 31px` from color picker in Transmitter.vue — let Bootstrap handle sizing
-- [ ] Make colorbar image responsive in Display.vue (`max-width: 100%; height: auto` instead of fixed `width="256" height="30"`)
+- [x] Add responsive breakpoints to all form columns (`col-12 col-sm-6` instead of fixed `col-6`) across Transmitter, Receiver, Environment, Simulation, Display, ClientSelector components
+- [x] Remove hardcoded `width: 38px; height: 31px` from color picker in Transmitter.vue — let Bootstrap handle sizing
+- [x] Make colorbar image responsive in Display.vue (`max-width: 100%; height: auto` instead of fixed `width="256" height="30"`)
 
 ### Medium
-- [ ] Add responsive stacking to TowerList items — tower name + buttons should stack vertically on narrow screens
-- [ ] Increase form row gap on mobile (`g-2` is tight at small sizes) — use `g-2 g-sm-2` with larger mobile gap or adjust padding
-- [ ] Increase antenna mismatch loss badge font size on mobile (0.7rem is too small on touch screens)
+- [x] Add responsive stacking to TowerList items — tower name + buttons wrap on narrow screens via `flex-wrap` + `gap-1`
+- [x] Add mobile-specific row spacing via `@media (max-width: 575.98px)` rule in style.css
+- [x] Increase antenna mismatch loss badge font size on mobile (`max(0.75rem, 12px)` floor)
 
 ### Minor
-- [ ] Prevent navbar brand text + buttons from overflowing on very narrow viewports (< 320px)
-- [ ] Add mobile-specific CSS rules in style.css for offcanvas sidebar behavior when virtual keyboard appears
+- [x] Prevent navbar brand text + buttons from overflowing on very narrow viewports — `text-truncate` on brand, `flex-shrink-0` on buttons, max-width constraint
+- [x] Add mobile-specific CSS rules in style.css for offcanvas sidebar max-height and overflow on small screens

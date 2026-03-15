@@ -1,7 +1,7 @@
 <template>
   <form novalidate>
     <div class="row g-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="radio_climate" class="form-label">Radio Climate</label>
         <select id="radio_climate" v-model="environment.radio_climate" class="form-select form-select-sm" required>
           <option value="equatorial">Equatorial</option>
@@ -14,7 +14,7 @@
         </select>
         <div class="invalid-feedback">Please select a radio climate.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="polarization" class="form-label">Polarization</label>
         <select id="polarization" v-model="environment.polarization" class="form-select form-select-sm" required>
           <option value="horizontal">Horizontal</option>
@@ -22,7 +22,7 @@
         </select>
         <div class="invalid-feedback">Please select a polarization type.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="clutter_height" class="form-label">Clutter Height <br />(m)</label>
         <input
           id="clutter_height"
@@ -35,7 +35,7 @@
         />
         <div class="invalid-feedback">Height must be >= 0 (default: 1.0).</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="ground_dielectric" class="form-label">Ground Dielectric (V/m)</label>
         <input
           id="ground_dielectric"
@@ -48,7 +48,7 @@
         />
         <div class="invalid-feedback">Dielectric constant must be >= 1 (default: 15.0).</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="ground_conductivity" class="form-label">Ground Conductivity (S/m)</label>
         <input
           id="ground_conductivity"
@@ -61,7 +61,7 @@
         />
         <div class="invalid-feedback">Conductivity must be >= 0 (default: 0.005).</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="atmosphere_bending" class="form-label">Atmospheric Bending (N-units)</label>
         <input
           id="atmosphere_bending"
