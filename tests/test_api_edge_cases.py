@@ -2,36 +2,24 @@
 
 import json
 import os
-import tempfile
-from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
-if "DB_PATH" not in os.environ:
-    _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    os.environ["DB_PATH"] = _tmp_db.name
-    _tmp_db.close()
-
-with patch("app.services.splat.Splat.__init__", lambda self, **kw: None):
-    from fastapi.testclient import TestClient
-
-    import app.auth as auth_mod
-    from app.db import get_db, init_db
-    from app.main import app
+import app.auth as auth_mod
+from app.db import db_connection, init_db
+from app.main import app
 
 
 @pytest.fixture(autouse=True)
 def _reset():
     init_db(os.environ["DB_PATH"])
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute("DELETE FROM tasks")
         conn.execute("DELETE FROM tower_paths")
         conn.execute("DELETE FROM towers")
         conn.commit()
-    finally:
-        conn.close()
     # Disable auth for these tests
     original = auth_mod.ADMIN_PASSWORD
     auth_mod.ADMIN_PASSWORD = None
@@ -45,27 +33,21 @@ def client():
 
 
 def _insert_tower(tower_id, geotiff=None):
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO towers (id, name, params, geotiff) VALUES (?, ?, ?, ?)",
             (tower_id, "Test", json.dumps({"lat": 0, "lon": 0}), geotiff),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _insert_task(task_id, tower_id, status="processing", error=None):
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO tasks (id, tower_id, status, error) VALUES (?, ?, ?, ?)",
             (task_id, tower_id, status, error),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 class TestGetResultEdgeCases:
@@ -151,15 +133,12 @@ class TestGetTowersResponse:
     def test_tower_params_are_parsed_json(self, client):
         tower_id = str(uuid4())
         params = {"lat": 51.0, "lon": -114.0, "tx_power": 30.0}
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             conn.execute(
                 "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
                 (tower_id, "Test", json.dumps(params)),
             )
             conn.commit()
-        finally:
-            conn.close()
 
         resp = client.get("/towers")
         towers = resp.json()["towers"]

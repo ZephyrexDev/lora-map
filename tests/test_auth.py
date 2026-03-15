@@ -2,34 +2,14 @@
 
 import json
 import os
-import tempfile
-from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
-
-# ---------------------------------------------------------------------------
-# Database setup (must happen before app import)
-# ---------------------------------------------------------------------------
-
-# Reuse an existing DB_PATH if another test module already set one; otherwise
-# create a fresh temp file.  This avoids overwriting the env var when pytest
-# collects multiple test modules in the same process.
-if "DB_PATH" in os.environ:
-    _tmp_db_path = os.environ["DB_PATH"]
-else:
-    _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    _tmp_db_path = _tmp_db.name
-    _tmp_db.close()
-    os.environ["DB_PATH"] = _tmp_db_path
-
-# Patch Splat so the real binary isn't required in tests.
-with patch("app.services.splat.Splat.__init__", lambda self, **kw: None):
-    from fastapi.testclient import TestClient
-
-    from app.db import get_db, init_db
-    from app.main import app
+import app.auth as auth_mod
+from app.db import db_connection, init_db
+from app.main import app
 
 
 # ---------------------------------------------------------------------------
@@ -39,15 +19,13 @@ with patch("app.services.splat.Splat.__init__", lambda self, **kw: None):
 @pytest.fixture(autouse=True)
 def _reset_db():
     """Re-initialize and wipe the database before every test."""
-    init_db(_tmp_db_path)
-    conn = get_db()
-    try:
+    db_path = os.environ["DB_PATH"]
+    init_db(db_path)
+    with db_connection() as conn:
         conn.execute("DELETE FROM tasks")
         conn.execute("DELETE FROM tower_paths")
         conn.execute("DELETE FROM towers")
         conn.commit()
-    finally:
-        conn.close()
     yield
 
 
@@ -61,59 +39,38 @@ def valid_payload() -> dict:
 # ---------------------------------------------------------------------------
 
 def _insert_tower(tower_id: str) -> None:
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
             (tower_id, "Test", json.dumps({"lat": 0, "lon": 0})),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _insert_task(task_id: str, tower_id: str, status: str = "processing") -> None:
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO tasks (id, tower_id, status) VALUES (?, ?, ?)",
             (task_id, tower_id, status),
         )
         conn.commit()
-    finally:
-        conn.close()
-
-
-def _client_no_auth() -> TestClient:
-    """Return a TestClient with ADMIN_PASSWORD disabled (None)."""
-    import app.auth as auth_mod
-
-    original = auth_mod.ADMIN_PASSWORD
-    auth_mod.ADMIN_PASSWORD = None
-    client = TestClient(app)
-    yield client
-    auth_mod.ADMIN_PASSWORD = original
-
-
-def _client_with_auth(password: str = "s3cret") -> TestClient:
-    """Return a TestClient with ADMIN_PASSWORD set."""
-    import app.auth as auth_mod
-
-    original = auth_mod.ADMIN_PASSWORD
-    auth_mod.ADMIN_PASSWORD = password
-    client = TestClient(app)
-    yield client
-    auth_mod.ADMIN_PASSWORD = original
 
 
 @pytest.fixture()
 def client_no_auth():
-    yield from _client_no_auth()
+    original = auth_mod.ADMIN_PASSWORD
+    auth_mod.ADMIN_PASSWORD = None
+    yield TestClient(app)
+    auth_mod.ADMIN_PASSWORD = original
 
 
 @pytest.fixture()
 def client_with_auth():
-    yield from _client_with_auth()
+    original = auth_mod.ADMIN_PASSWORD
+    auth_mod.ADMIN_PASSWORD = AUTH_PASSWORD
+    auth_mod._login_attempts.clear()
+    yield TestClient(app)
+    auth_mod.ADMIN_PASSWORD = original
 
 
 AUTH_PASSWORD = "s3cret"

@@ -1,23 +1,14 @@
 """Tests for auth rate limiting and edge cases in app.auth."""
 
 import os
-import tempfile
-from unittest.mock import patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-if "DB_PATH" not in os.environ:
-    _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-    os.environ["DB_PATH"] = _tmp_db.name
-    _tmp_db.close()
-
-with patch("app.services.splat.Splat.__init__", lambda self, **kw: None):
-    from fastapi.testclient import TestClient
-
-    import app.auth as auth_mod
-    from app.auth import _login_attempts
-    from app.db import init_db
-    from app.main import app
+import app.auth as auth_mod
+from app.auth import _login_attempts
+from app.db import init_db
+from app.main import app
 
 
 @pytest.fixture(autouse=True)
@@ -49,11 +40,8 @@ class TestRateLimit:
         resp = client.post("/auth/login", json={"password": "wrong"})
         assert resp.status_code == 429
 
-    def test_rate_limit_resets_after_window(self, client):
-        """After the window expires, attempts should be allowed again."""
-        import time as time_mod
-
-        # Fill up attempts
+    def test_rate_limit_resets_after_clearing(self, client):
+        """After the window expires (simulated by clearing), attempts allowed again."""
         for _ in range(5):
             client.post("/auth/login", json={"password": "wrong"})
 

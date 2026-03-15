@@ -36,7 +36,7 @@ from app.services.splat import Splat
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-splat_service = Splat(splat_path="/app/splat")
+splat_service = Splat(splat_path=os.environ.get("SPLAT_PATH", "/app/splat"))
 
 
 @asynccontextmanager

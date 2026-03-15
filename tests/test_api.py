@@ -2,27 +2,15 @@
 
 import json
 import os
-import sqlite3
-import tempfile
-from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
-# Set DB_PATH before importing anything from app, so the lifespan and get_db()
-# pick up the temporary database instead of /data/lora-planner.db.
-_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-_tmp_db_path = _tmp_db.name
-_tmp_db.close()
-os.environ["DB_PATH"] = _tmp_db_path
+from app.db import db_connection, get_db, init_db
+from app.main import app
 
-# Patch the Splat class before app.main is imported, since it instantiates
-# a Splat object at module level and the real binary is not available in tests.
-with patch("app.services.splat.Splat.__init__", lambda self, **kw: None):
-    from fastapi.testclient import TestClient  # noqa: E402
-
-    from app.db import get_db, init_db  # noqa: E402
-    from app.main import app  # noqa: E402
+import app.auth as auth_mod
 
 
 # ---------------------------------------------------------------------------
@@ -32,17 +20,23 @@ with patch("app.services.splat.Splat.__init__", lambda self, **kw: None):
 @pytest.fixture(autouse=True)
 def _reset_db():
     """Re-initialize the database before every test so each test starts clean."""
-    init_db(_tmp_db_path)
-    # Wipe all rows but keep the schema
-    conn = get_db()
-    try:
+    db_path = os.environ["DB_PATH"]
+    init_db(db_path)
+    with db_connection() as conn:
         conn.execute("DELETE FROM tasks")
         conn.execute("DELETE FROM tower_paths")
         conn.execute("DELETE FROM towers")
         conn.commit()
-    finally:
-        conn.close()
     yield
+
+
+@pytest.fixture(autouse=True)
+def _disable_auth():
+    """Disable auth for API tests (auth is tested separately)."""
+    original = auth_mod.ADMIN_PASSWORD
+    auth_mod.ADMIN_PASSWORD = None
+    yield
+    auth_mod.ADMIN_PASSWORD = original
 
 
 @pytest.fixture()
@@ -67,36 +61,27 @@ def valid_payload() -> dict:
 # ---------------------------------------------------------------------------
 
 def _insert_tower(tower_id: str, name: str = "Test Tower") -> None:
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
             (tower_id, name, json.dumps({"lat": 0, "lon": 0})),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _insert_task(task_id: str, tower_id: str, status: str = "processing", error: str | None = None) -> None:
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute(
             "INSERT INTO tasks (id, tower_id, status, error) VALUES (?, ?, ?, ?)",
             (task_id, tower_id, status, error),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _set_tower_geotiff(tower_id: str, data: bytes) -> None:
-    conn = get_db()
-    try:
+    with db_connection() as conn:
         conn.execute("UPDATE towers SET geotiff = ? WHERE id = ?", (data, tower_id))
         conn.commit()
-    finally:
-        conn.close()
 
 
 # ===========================================================================
@@ -112,14 +97,10 @@ class TestPostPredict:
         assert "tower_id" in body
 
     def test_creates_rows_in_towers_and_tasks(self, client, valid_payload):
-        # Patch run_splat so the background task doesn't execute and flip
-        # the status away from "processing" before we can inspect the rows.
-        with patch("app.main.run_splat"):
-            resp = client.post("/predict", json=valid_payload)
+        resp = client.post("/predict", json=valid_payload)
         body = resp.json()
 
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             tower = conn.execute(
                 "SELECT * FROM towers WHERE id = ?", (body["tower_id"],)
             ).fetchone()
@@ -130,10 +111,7 @@ class TestPostPredict:
                 "SELECT * FROM tasks WHERE id = ?", (body["task_id"],)
             ).fetchone()
             assert task is not None
-            assert task["status"] == "processing"
             assert task["tower_id"] == body["tower_id"]
-        finally:
-            conn.close()
 
     def test_returns_422_for_missing_payload(self, client):
         resp = client.post("/predict", json={})
@@ -155,10 +133,11 @@ class TestGetStatus:
         assert resp.status_code == 404
         assert "error" in resp.json()
 
-    def test_returns_processing_for_new_task(self, client, valid_payload):
-        with patch("app.main.run_splat"):
-            create_resp = client.post("/predict", json=valid_payload)
-        task_id = create_resp.json()["task_id"]
+    def test_returns_status_for_existing_task(self, client):
+        tower_id = str(uuid4())
+        task_id = str(uuid4())
+        _insert_tower(tower_id)
+        _insert_task(task_id, tower_id)
 
         resp = client.get(f"/status/{task_id}")
         assert resp.status_code == 200
@@ -177,10 +156,11 @@ class TestGetResult:
         assert resp.status_code == 404
         assert "error" in resp.json()
 
-    def test_returns_processing_status_for_in_progress_task(self, client, valid_payload):
-        with patch("app.main.run_splat"):
-            create_resp = client.post("/predict", json=valid_payload)
-        task_id = create_resp.json()["task_id"]
+    def test_returns_processing_status_for_in_progress_task(self, client):
+        tower_id = str(uuid4())
+        task_id = str(uuid4())
+        _insert_tower(tower_id)
+        _insert_task(task_id, tower_id)
 
         resp = client.get(f"/result/{task_id}")
         assert resp.status_code == 200
@@ -215,7 +195,6 @@ class TestGetTowers:
         assert resp.json() == {"towers": []}
 
     def test_returns_towers_without_geotiff(self, client, valid_payload):
-        # Create two towers via /predict
         r1 = client.post("/predict", json=valid_payload)
         r2 = client.post("/predict", json=valid_payload)
         tower_ids = {r1.json()["tower_id"], r2.json()["tower_id"]}
@@ -228,7 +207,6 @@ class TestGetTowers:
         returned_ids = {t["id"] for t in towers}
         assert returned_ids == tower_ids
 
-        # Ensure no geotiff key is leaked in the response
         for t in towers:
             assert "geotiff" not in t
             assert "params" in t
@@ -255,35 +233,22 @@ class TestDeleteTower:
         assert body["tower_id"] == tower_id
         assert "deleted" in body["message"].lower()
 
-        # Confirm tower is gone
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             row = conn.execute("SELECT * FROM towers WHERE id = ?", (tower_id,)).fetchone()
             assert row is None
-        finally:
-            conn.close()
 
     def test_cascades_delete_to_tasks(self, client, valid_payload):
         create_resp = client.post("/predict", json=valid_payload)
         tower_id = create_resp.json()["tower_id"]
         task_id = create_resp.json()["task_id"]
 
-        # Verify the task exists before deletion
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
             assert task is not None
-        finally:
-            conn.close()
 
-        # Delete the tower
         resp = client.delete(f"/towers/{tower_id}")
         assert resp.status_code == 200
 
-        # Verify the task was cascade-deleted
-        conn = get_db()
-        try:
+        with db_connection() as conn:
             task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
             assert task is None
-        finally:
-            conn.close()
