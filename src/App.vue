@@ -3,7 +3,7 @@
     <nav class="navbar navbar-dark bg-dark fixed-top">
       <div class="container-fluid">
         <a class="navbar-brand" href="#">
-          <img src="/logo.svg" alt="LoRa Mesh Logo" width="30" height="30" class="d-inline">
+          <img src="/logo.svg" alt="LoRa Mesh Logo" width="30" height="30" class="d-inline" />
           LoRa Coverage Planner
         </a>
         <div class="d-flex align-items-center">
@@ -14,27 +14,71 @@
             data-bs-target="#loginModal"
             :title="store.isAdmin ? 'Admin (click to manage)' : 'Visitor mode (click to login)'"
           >
-            <svg v-if="store.isAdmin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M11 1a2 2 0 0 0-2 2v4a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1V3a5 5 0 0 1 6.15-4.87l-.35.87A4 4 0 0 0 5 3v4h6a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2z"/>
+            <svg
+              v-if="store.isAdmin"
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M11 1a2 2 0 0 0-2 2v4a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1V3a5 5 0 0 1 6.15-4.87l-.35.87A4 4 0 0 0 5 3v4h6a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2z"
+              />
             </svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2"/>
+            <svg
+              v-else
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              fill="currentColor"
+              viewBox="0 0 16 16"
+            >
+              <path
+                d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2"
+              />
             </svg>
           </button>
-          <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasDarkNavbar" aria-controls="offcanvasDarkNavbar" aria-label="Toggle navigation">
+          <button
+            class="navbar-toggler"
+            type="button"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#offcanvasDarkNavbar"
+            aria-controls="offcanvasDarkNavbar"
+            aria-label="Toggle navigation"
+          >
             <span class="navbar-toggler-icon"></span>
           </button>
         </div>
-        <div class="offcanvas offcanvas-end text-bg-dark show" tabindex="-1" id="offcanvasDarkNavbar" aria-labelledby="offcanvasDarkNavbarLabel" data-bs-backdrop="false">
+        <div
+          id="offcanvasDarkNavbar"
+          class="offcanvas offcanvas-end text-bg-dark show"
+          tabindex="-1"
+          aria-labelledby="offcanvasDarkNavbarLabel"
+          data-bs-backdrop="false"
+        >
           <div class="offcanvas-header">
-            <h5 class="offcanvas-title" id="offcanvasDarkNavbarLabel">Site Parameters</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            <h5 id="offcanvasDarkNavbarLabel" class="offcanvas-title">Site Parameters</h5>
+            <button
+              type="button"
+              class="btn-close btn-close-white"
+              data-bs-dismiss="offcanvas"
+              aria-label="Close"
+            ></button>
           </div>
           <div class="offcanvas-body">
             <template v-if="store.isAdmin">
               <ul class="navbar-nav">
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="true">Site / Transmitter</a>
+                  <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="true"
+                    >Site / Transmitter</a
+                  >
                   <ul class="dropdown-menu dropdown-menu-dark p-3 show">
                     <li>
                       <Transmitter />
@@ -42,7 +86,15 @@
                   </ul>
                 </li>
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Receiver</a>
+                  <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    >Receiver</a
+                  >
                   <ul class="dropdown-menu dropdown-menu-dark p-3">
                     <li>
                       <Receiver />
@@ -50,7 +102,15 @@
                   </ul>
                 </li>
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Environment</a>
+                  <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    >Environment</a
+                  >
                   <ul class="dropdown-menu dropdown-menu-dark p-3">
                     <li>
                       <Environment />
@@ -58,7 +118,15 @@
                   </ul>
                 </li>
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">Simulation Options</a>
+                  <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    >Simulation Options</a
+                  >
                   <ul class="dropdown-menu dropdown-menu-dark p-3">
                     <li>
                       <Simulation />
@@ -66,7 +134,14 @@
                   </ul>
                 </li>
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="true">
+                  <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="true"
+                  >
                     Display
                   </a>
                   <ul class="dropdown-menu dropdown-menu-dark p-3 show">
@@ -77,15 +152,35 @@
                 </li>
               </ul>
               <div class="mt-3 d-flex gap-2">
-                <button :disabled="store.simulationState === 'running'" @click="store.runSimulation" type="button" class="btn btn-success btn-sm" id="runSimulation">
-                  <span :class="{ 'd-none': store.simulationState !== 'running' }" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <button
+                  id="runSimulation"
+                  :disabled="store.simulationState === 'running'"
+                  type="button"
+                  class="btn btn-success btn-sm"
+                  @click="store.runSimulation"
+                >
+                  <span
+                    :class="{ 'd-none': store.simulationState !== 'running' }"
+                    class="spinner-border spinner-border-sm"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
                   <span class="button-text">{{ buttonText() }}</span>
                 </button>
               </div>
             </template>
             <div v-else class="text-center text-secondary mt-4">
-              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" class="mb-2" viewBox="0 0 16 16">
-                <path d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0M9.283 4.002V12H7.971V5.338h-.065L6.072 6.656V5.385l1.899-1.383z"/>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="32"
+                height="32"
+                fill="currentColor"
+                class="mb-2"
+                viewBox="0 0 16 16"
+              >
+                <path
+                  d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0M9.283 4.002V12H7.971V5.338h-.065L6.072 6.656V5.385l1.899-1.383z"
+                />
               </svg>
               <p class="mb-1"><strong>View Only</strong></p>
               <p class="small">Log in as admin to edit parameters and run simulations.</p>
@@ -96,40 +191,39 @@
         </div>
       </div>
     </nav>
-    <div id="map" ref="map">
-    </div>
+    <div id="map" ref="map"></div>
     <LoginForm />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import "leaflet/dist/leaflet.css"
-import "bootstrap/dist/css/bootstrap.min.css"
-import "bootstrap/dist/js/bootstrap.bundle.min.js"
-import Transmitter from "./components/Transmitter.vue"
-import Receiver from "./components/Receiver.vue"
-import Environment from "./components/Environment.vue"
-import Simulation from "./components/Simulation.vue"
-import Display from "./components/Display.vue"
-import TowerList from "./components/TowerList.vue"
-import LoginForm from "./components/LoginForm.vue"
+import { onMounted } from "vue";
+import "leaflet/dist/leaflet.css";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "bootstrap/dist/js/bootstrap.bundle.min.js";
+import Transmitter from "./components/Transmitter.vue";
+import Receiver from "./components/Receiver.vue";
+import Environment from "./components/Environment.vue";
+import Simulation from "./components/Simulation.vue";
+import Display from "./components/Display.vue";
+import TowerList from "./components/TowerList.vue";
+import LoginForm from "./components/LoginForm.vue";
 
-import { useStore } from './store.ts'
-const store = useStore()
+import { useStore } from "./store.ts";
+const store = useStore();
 
 onMounted(() => {
-  store.checkAuth()
-})
+  store.checkAuth();
+});
 const buttonText = () => {
-  if ('running' === store.simulationState) {
-    return 'Running'
-  } else if ('failed' === store.simulationState) {
-    return 'Failed'
+  if ("running" === store.simulationState) {
+    return "Running";
+  } else if ("failed" === store.simulationState) {
+    return "Failed";
   } else {
-    return 'Run Simulation'
+    return "Run Simulation";
   }
-}
+};
 </script>
 
 <style>
@@ -143,5 +237,4 @@ const buttonText = () => {
 .leaflet-control-attribution {
   filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
 } */
-
 </style>

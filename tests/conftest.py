@@ -23,7 +23,7 @@ if _splat_bin_dir.is_dir():
     os.environ.setdefault("SPLAT_PATH", str(_splat_bin_dir))
 
 # Use a temporary database for tests
-_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+_tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)  # noqa: SIM115
 _tmp_db_path = _tmp_db.name
 _tmp_db.close()
 os.environ["DB_PATH"] = _tmp_db_path
@@ -39,10 +39,10 @@ import app.auth as auth_mod  # noqa: E402
 from app.db import db_connection, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def _reset_db():
@@ -86,6 +86,7 @@ def valid_payload() -> dict:
 # ---------------------------------------------------------------------------
 # Shared DB helpers
 # ---------------------------------------------------------------------------
+
 
 def insert_tower(
     tower_id: str | None = None,

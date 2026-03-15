@@ -1,223 +1,333 @@
-
 <template>
-    <form novalidate>
-        <div class="row g-2">
-            <div class="col-8">
-                <label for="name" class="form-label">Site name</label>
-                <input v-model="transmitter.name" class="form-control form-control-sm" id="name" required data-bs-toggle="tooltip" title="Site Name" />
-            </div>
-            <div class="col-4">
-                <label for="tx_color" class="form-label">Tower Color</label>
-                <div class="d-flex align-items-center gap-1">
-                    <input v-model="transmitter.tx_color" type="color" class="form-control form-control-sm form-control-color" id="tx_color" :disabled="transmitter.tx_color === ''" title="Tower overlay color" style="width: 38px; height: 31px;" />
-                    <div class="form-check form-check-inline mb-0">
-                        <input class="form-check-input" type="checkbox" id="tx_color_auto" :checked="transmitter.tx_color === ''" @change="toggleAutoColor" />
-                        <label class="form-check-label small" for="tx_color_auto">Auto</label>
-                    </div>
-                </div>
-            </div>
+  <form novalidate>
+    <div class="row g-2">
+      <div class="col-8">
+        <label for="name" class="form-label">Site name</label>
+        <input
+          id="name"
+          v-model="transmitter.name"
+          class="form-control form-control-sm"
+          required
+          data-bs-toggle="tooltip"
+          title="Site Name"
+        />
+      </div>
+      <div class="col-4">
+        <label for="tx_color" class="form-label">Tower Color</label>
+        <div class="d-flex align-items-center gap-1">
+          <input
+            id="tx_color"
+            v-model="transmitter.tx_color"
+            type="color"
+            class="form-control form-control-sm form-control-color"
+            :disabled="transmitter.tx_color === ''"
+            title="Tower overlay color"
+            style="width: 38px; height: 31px"
+          />
+          <div class="form-check form-check-inline mb-0">
+            <input
+              id="tx_color_auto"
+              class="form-check-input"
+              type="checkbox"
+              :checked="transmitter.tx_color === ''"
+              @change="toggleAutoColor"
+            />
+            <label class="form-check-label small" for="tx_color_auto">Auto</label>
+          </div>
         </div>
-        <div class="row g-2">
-            <div class="col-6">
-                <label for="tx_lat" class="form-label">Latitude (degrees)</label>
-                <input v-model="transmitter.tx_lat" type="number" class="form-control form-control-sm" id="tx_lat" required min="-90" max="90" step="0.000001" data-bs-toggle="tooltip" title="Transmitter latitude in degrees (-90 to 90)." />
-                <div class="invalid-feedback">Please enter a valid latitude (-90 to 90).</div>
-            </div>
-            <div class="col-6">
-                <label for="tx_lon" class="form-label">Longitude (degrees)</label>
-                <input v-model="transmitter.tx_lon" type="number" class="form-control form-control-sm" id="tx_lon" required min="-180" max="180" step="0.000001" data-bs-toggle="tooltip" title="Transmitter longitude in degrees (-180 to 180)." />
-                <div class="invalid-feedback">Please enter a valid longitude (-180 to 180).</div>
-            </div>
-        </div>
+      </div>
+    </div>
+    <div class="row g-2">
+      <div class="col-6">
+        <label for="tx_lat" class="form-label">Latitude (degrees)</label>
+        <input
+          id="tx_lat"
+          v-model="transmitter.tx_lat"
+          type="number"
+          class="form-control form-control-sm"
+          required
+          min="-90"
+          max="90"
+          step="0.000001"
+          data-bs-toggle="tooltip"
+          title="Transmitter latitude in degrees (-90 to 90)."
+        />
+        <div class="invalid-feedback">Please enter a valid latitude (-90 to 90).</div>
+      </div>
+      <div class="col-6">
+        <label for="tx_lon" class="form-label">Longitude (degrees)</label>
+        <input
+          id="tx_lon"
+          v-model="transmitter.tx_lon"
+          type="number"
+          class="form-control form-control-sm"
+          required
+          min="-180"
+          max="180"
+          step="0.000001"
+          data-bs-toggle="tooltip"
+          title="Transmitter longitude in degrees (-180 to 180)."
+        />
+        <div class="invalid-feedback">Please enter a valid longitude (-180 to 180).</div>
+      </div>
+    </div>
 
-        <!-- Preset selectors -->
-        <div class="row g-2 mt-2">
-            <div class="col-6">
-                <label for="hardwarePreset" class="form-label">Hardware</label>
-                <select v-model="selectedHardware" @change="onHardwareChange" class="form-select form-select-sm" id="hardwarePreset">
-                    <option :value="-1">Custom</option>
-                    <option v-for="(hw, idx) in HARDWARE_PRESETS" :key="idx" :value="idx">
-                        {{ hw.name }}{{ hw.is_custom ? '' : ` (${hw.max_power_dbm} dBm)` }}
-                    </option>
-                </select>
-            </div>
-            <div class="col-6">
-                <label for="regionPreset" class="form-label">Country / Region</label>
-                <select v-model="selectedRegion" @change="onRegionChange" class="form-select form-select-sm" id="regionPreset">
-                    <option :value="-1">Custom</option>
-                    <option v-for="(freq, idx) in FREQUENCY_PRESETS" :key="idx" :value="idx">
-                        {{ freq.region }} ({{ freq.code }}) — {{ freq.frequency_mhz }} MHz
-                    </option>
-                </select>
-            </div>
+    <!-- Preset selectors -->
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <label for="hardwarePreset" class="form-label">Hardware</label>
+        <select
+          id="hardwarePreset"
+          v-model="selectedHardware"
+          class="form-select form-select-sm"
+          @change="onHardwareChange"
+        >
+          <option :value="-1">Custom</option>
+          <option v-for="(hw, idx) in HARDWARE_PRESETS" :key="idx" :value="idx">
+            {{ hw.name }}{{ hw.is_custom ? "" : ` (${hw.max_power_dbm} dBm)` }}
+          </option>
+        </select>
+      </div>
+      <div class="col-6">
+        <label for="regionPreset" class="form-label">Country / Region</label>
+        <select id="regionPreset" v-model="selectedRegion" class="form-select form-select-sm" @change="onRegionChange">
+          <option :value="-1">Custom</option>
+          <option v-for="(freq, idx) in FREQUENCY_PRESETS" :key="idx" :value="idx">
+            {{ freq.region }} ({{ freq.code }}) — {{ freq.frequency_mhz }} MHz
+          </option>
+        </select>
+      </div>
+    </div>
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <label for="antennaPreset" class="form-label">Antenna</label>
+        <div class="d-flex align-items-center gap-1">
+          <select
+            id="antennaPreset"
+            v-model="selectedAntenna"
+            class="form-select form-select-sm flex-grow-1"
+            @change="onAntennaChange"
+          >
+            <option :value="-1">Custom</option>
+            <option v-for="(ant, idx) in ANTENNA_PRESETS" :key="idx" :value="idx">
+              {{ ant.name }} ({{ ant.gain_dbi }} dBi)
+            </option>
+          </select>
+          <span
+            v-if="mismatchLossBadge !== null"
+            class="badge bg-warning text-dark"
+            style="white-space: nowrap; font-size: 0.7rem"
+          >
+            (-{{ mismatchLossBadge }} dB)
+          </span>
         </div>
-        <div class="row g-2 mt-2">
-            <div class="col-6">
-                <label for="antennaPreset" class="form-label">Antenna</label>
-                <div class="d-flex align-items-center gap-1">
-                    <select v-model="selectedAntenna" @change="onAntennaChange" class="form-select form-select-sm flex-grow-1" id="antennaPreset">
-                        <option :value="-1">Custom</option>
-                        <option v-for="(ant, idx) in ANTENNA_PRESETS" :key="idx" :value="idx">
-                            {{ ant.name }} ({{ ant.gain_dbi }} dBi)
-                        </option>
-                    </select>
-                    <span v-if="mismatchLossBadge !== null" class="badge bg-warning text-dark" style="white-space: nowrap; font-size: 0.7rem;">
-                        (-{{ mismatchLossBadge }} dB)
-                    </span>
-                </div>
-            </div>
-            <div class="col-6">
-                <label for="heightPreset" class="form-label">Height Preset</label>
-                <select v-model="selectedHeight" @change="onHeightChange" class="form-select form-select-sm" id="heightPreset">
-                    <option :value="-1">Custom</option>
-                    <option v-for="(h, idx) in HEIGHT_PRESETS" :key="idx" :value="idx">
-                        {{ h.label }} ({{ h.height_m }} m)
-                    </option>
-                </select>
-            </div>
-        </div>
+      </div>
+      <div class="col-6">
+        <label for="heightPreset" class="form-label">Height Preset</label>
+        <select id="heightPreset" v-model="selectedHeight" class="form-select form-select-sm" @change="onHeightChange">
+          <option :value="-1">Custom</option>
+          <option v-for="(h, idx) in HEIGHT_PRESETS" :key="idx" :value="idx">{{ h.label }} ({{ h.height_m }} m)</option>
+        </select>
+      </div>
+    </div>
 
-        <!-- Manual fields -->
-        <div class="row g-2 mt-2">
-            <div class="col-6">
-                <label for="tx_power" class="form-label">Power (W)</label>
-                <input v-model="transmitter.tx_power" type="number" class="form-control form-control-sm" id="tx_power" required min="0" step="0.1" data-bs-toggle="tooltip" title="Transmitter power in watts (>0)." :disabled="isHardwarePresetActive" />
-                <div class="invalid-feedback">Power must be a positive number.</div>
-            </div>
-            <div class="col-6">
-                <label for="frequency" class="form-label">Frequency (MHz)</label>
-                <input v-model="transmitter.tx_freq" type="number" class="form-control form-control-sm" id="tx_freq" required min="20" max="20000" step="0.1" data-bs-toggle="tooltip" title="Transmitter frequency in MHz (20 to 20,000)." :disabled="isRegionPresetActive" />
-                <div class="invalid-feedback">Frequency must be a positive number.</div>
-            </div>
-        </div>
-        <div class="row g-2 mt-2">
-            <div class="col-6">
-                <label for="tx_height" class="form-label">Height AGL (m)</label>
-                <input v-model="transmitter.tx_height" type="number" class="form-control form-control-sm" id="tx_height" required min="1.0" step="0.1" data-bs-toggle="tooltip" title="Transmitter height above ground in meters (>= 1.0)." :disabled="isHeightPresetActive" />
-                <div class="invalid-feedback">Height must be a positive number.</div>
-            </div>
-            <div class="col-6">
-                <label for="tx_gain" class="form-label">Antenna Gain (dB)</label>
-                <input v-model="transmitter.tx_gain" type="number" class="form-control form-control-sm" id="tx_gain" required min="0" step="0.1" :disabled="isAntennaPresetActive" />
-                <div class="invalid-feedback">Gain must be a positive number.</div>
-            </div>
-        </div>
-        <div class="mt-3 d-flex gap-2">
-            <button @click="setWithMap" type="button" id="setWithMap" class="btn btn-primary btn-sm" data-bs-toggle="popover" data-bs-trigger="manual" data-bs-placement="left" title="Set Coordinates" data-bs-content="" content="Click on the map to set the transmitter location.">
-                Set with Map
-            </button>
-            <button @click="centerMapOnTransmitter" type="button" class="btn btn-secondary btn-sm">Center map on transmitter</button>
-        </div>
-    </form>
+    <!-- Manual fields -->
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <label for="tx_power" class="form-label">Power (W)</label>
+        <input
+          id="tx_power"
+          v-model="transmitter.tx_power"
+          type="number"
+          class="form-control form-control-sm"
+          required
+          min="0"
+          step="0.1"
+          data-bs-toggle="tooltip"
+          title="Transmitter power in watts (>0)."
+          :disabled="isHardwarePresetActive"
+        />
+        <div class="invalid-feedback">Power must be a positive number.</div>
+      </div>
+      <div class="col-6">
+        <label for="frequency" class="form-label">Frequency (MHz)</label>
+        <input
+          id="tx_freq"
+          v-model="transmitter.tx_freq"
+          type="number"
+          class="form-control form-control-sm"
+          required
+          min="20"
+          max="20000"
+          step="0.1"
+          data-bs-toggle="tooltip"
+          title="Transmitter frequency in MHz (20 to 20,000)."
+          :disabled="isRegionPresetActive"
+        />
+        <div class="invalid-feedback">Frequency must be a positive number.</div>
+      </div>
+    </div>
+    <div class="row g-2 mt-2">
+      <div class="col-6">
+        <label for="tx_height" class="form-label">Height AGL (m)</label>
+        <input
+          id="tx_height"
+          v-model="transmitter.tx_height"
+          type="number"
+          class="form-control form-control-sm"
+          required
+          min="1.0"
+          step="0.1"
+          data-bs-toggle="tooltip"
+          title="Transmitter height above ground in meters (>= 1.0)."
+          :disabled="isHeightPresetActive"
+        />
+        <div class="invalid-feedback">Height must be a positive number.</div>
+      </div>
+      <div class="col-6">
+        <label for="tx_gain" class="form-label">Antenna Gain (dB)</label>
+        <input
+          id="tx_gain"
+          v-model="transmitter.tx_gain"
+          type="number"
+          class="form-control form-control-sm"
+          required
+          min="0"
+          step="0.1"
+          :disabled="isAntennaPresetActive"
+        />
+        <div class="invalid-feedback">Gain must be a positive number.</div>
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button
+        id="setWithMap"
+        type="button"
+        class="btn btn-primary btn-sm"
+        data-bs-toggle="popover"
+        data-bs-trigger="manual"
+        data-bs-placement="left"
+        title="Set Coordinates"
+        data-bs-content=""
+        content="Click on the map to set the transmitter location."
+        @click="setWithMap"
+      >
+        Set with Map
+      </button>
+      <button type="button" class="btn btn-secondary btn-sm" @click="centerMapOnTransmitter">
+        Center map on transmitter
+      </button>
+    </div>
+  </form>
 </template>
 
 <script setup lang="ts">
-    import L from 'leaflet';
-    import * as bootstrap from 'bootstrap';
-    import { useStore } from '../store.ts'
-    import { onMounted, ref, computed } from 'vue';
-    import { redPinMarker } from '../layers.ts';
-    import { HARDWARE_PRESETS } from '../presets/hardware.ts';
-    import { FREQUENCY_PRESETS } from '../presets/frequencies.ts';
-    import { ANTENNA_PRESETS, mismatchLoss } from '../presets/antennas.ts';
-    import { HEIGHT_PRESETS } from '../presets/heights.ts';
+import L from "leaflet";
+import * as bootstrap from "bootstrap";
+import { useStore } from "../store.ts";
+import { onMounted, ref, computed } from "vue";
+import { redPinMarker } from "../layers.ts";
+import { HARDWARE_PRESETS } from "../presets/hardware.ts";
+import { FREQUENCY_PRESETS } from "../presets/frequencies.ts";
+import { ANTENNA_PRESETS, mismatchLoss } from "../presets/antennas.ts";
+import { HEIGHT_PRESETS } from "../presets/heights.ts";
 
-    const store = useStore();
-    const transmitter = store.splatParams.transmitter;
+const store = useStore();
+const transmitter = store.splatParams.transmitter;
 
-    // Preset selection state (-1 means "Custom")
-    const selectedHardware = ref(-1);
-    const selectedRegion = ref(-1);
-    const selectedAntenna = ref(-1);
-    const selectedHeight = ref(-1);
+// Preset selection state (-1 means "Custom")
+const selectedHardware = ref(-1);
+const selectedRegion = ref(-1);
+const selectedAntenna = ref(-1);
+const selectedHeight = ref(-1);
 
-    const isHardwarePresetActive = computed(() => {
-        if (selectedHardware.value < 0) return false;
-        const preset = HARDWARE_PRESETS[selectedHardware.value];
-        return preset && !preset.is_custom;
-    });
-    const isRegionPresetActive = computed(() => selectedRegion.value >= 0);
-    const isAntennaPresetActive = computed(() => selectedAntenna.value >= 0);
-    const isHeightPresetActive = computed(() => selectedHeight.value >= 0);
+const isHardwarePresetActive = computed(() => {
+  if (selectedHardware.value < 0) return false;
+  const preset = HARDWARE_PRESETS[selectedHardware.value];
+  return preset && !preset.is_custom;
+});
+const isRegionPresetActive = computed(() => selectedRegion.value >= 0);
+const isAntennaPresetActive = computed(() => selectedAntenna.value >= 0);
+const isHeightPresetActive = computed(() => selectedHeight.value >= 0);
 
-    const mismatchLossBadge = computed(() => {
-        if (selectedAntenna.value < 0) return null;
-        const preset = ANTENNA_PRESETS[selectedAntenna.value];
-        if (!preset) return null;
-        return mismatchLoss(preset.swr).toFixed(2);
-    });
+const mismatchLossBadge = computed(() => {
+  if (selectedAntenna.value < 0) return null;
+  const preset = ANTENNA_PRESETS[selectedAntenna.value];
+  if (!preset) return null;
+  return mismatchLoss(preset.swr).toFixed(2);
+});
 
-    function onHardwareChange() {
-        if (selectedHardware.value < 0) return;
-        const preset = HARDWARE_PRESETS[selectedHardware.value];
-        if (!preset || preset.is_custom) return;
-        // Convert dBm to watts: W = 10^((dBm - 30) / 10)
-        transmitter.tx_power = parseFloat(Math.pow(10, (preset.max_power_dbm - 30) / 10).toFixed(4));
+function onHardwareChange() {
+  if (selectedHardware.value < 0) return;
+  const preset = HARDWARE_PRESETS[selectedHardware.value];
+  if (!preset || preset.is_custom) return;
+  // Convert dBm to watts: W = 10^((dBm - 30) / 10)
+  transmitter.tx_power = parseFloat(Math.pow(10, (preset.max_power_dbm - 30) / 10).toFixed(4));
+}
+
+function onRegionChange() {
+  if (selectedRegion.value < 0) return;
+  const preset = FREQUENCY_PRESETS[selectedRegion.value];
+  if (!preset) return;
+  transmitter.tx_freq = preset.frequency_mhz;
+}
+
+function onAntennaChange() {
+  if (selectedAntenna.value < 0) return;
+  const preset = ANTENNA_PRESETS[selectedAntenna.value];
+  if (!preset) return;
+  transmitter.tx_gain = preset.gain_dbi;
+  transmitter.tx_swr = preset.swr;
+}
+
+function onHeightChange() {
+  if (selectedHeight.value < 0) return;
+  const preset = HEIGHT_PRESETS[selectedHeight.value];
+  if (!preset) return;
+  transmitter.tx_height = preset.height_m;
+}
+
+function toggleAutoColor() {
+  if (transmitter.tx_color === "") {
+    transmitter.tx_color = "#4a90d9";
+  } else {
+    transmitter.tx_color = "";
+  }
+}
+
+const centerMapOnTransmitter = () => {
+  if (!isNaN(transmitter.tx_lat) && !isNaN(transmitter.tx_lon)) {
+    store.map!.setView([transmitter.tx_lat, transmitter.tx_lon], store.map!.getZoom()); // Center map on the coordinates
+  } else {
+    alert("Please enter valid Latitude and Longitude values.");
+  }
+};
+let popover = new bootstrap.Popover(document.createElement("input"), {
+  trigger: "manual",
+});
+
+const setWithMap = () => {
+  popover.show();
+  store.map!.once("click", function (e: any) {
+    const { lat } = e.latlng;
+    let { lng } = e.latlng; // Get clicked location coordinates
+    lng = ((((lng + 180) % 360) + 360) % 360) - 180;
+
+    store.setTxCoords(lat.toFixed(6), lng.toFixed(6)); // Update the store
+
+    // Remove the existing marker if it exists
+    if (store.currentMarker) {
+      store.map!.removeLayer(store.currentMarker as L.Marker);
     }
-
-    function onRegionChange() {
-        if (selectedRegion.value < 0) return;
-        const preset = FREQUENCY_PRESETS[selectedRegion.value];
-        if (!preset) return;
-        transmitter.tx_freq = preset.frequency_mhz;
-    }
-
-    function onAntennaChange() {
-        if (selectedAntenna.value < 0) return;
-        const preset = ANTENNA_PRESETS[selectedAntenna.value];
-        if (!preset) return;
-        transmitter.tx_gain = preset.gain_dbi;
-        transmitter.tx_swr = preset.swr;
-    }
-
-    function onHeightChange() {
-        if (selectedHeight.value < 0) return;
-        const preset = HEIGHT_PRESETS[selectedHeight.value];
-        if (!preset) return;
-        transmitter.tx_height = preset.height_m;
-    }
-
-    function toggleAutoColor() {
-        if (transmitter.tx_color === '') {
-            transmitter.tx_color = '#4a90d9';
-        } else {
-            transmitter.tx_color = '';
-        }
-    }
-
-    const centerMapOnTransmitter = () => {
-        if (!isNaN(transmitter.tx_lat) && !isNaN(transmitter.tx_lon)) {
-            store.map!.setView([transmitter.tx_lat, transmitter.tx_lon], store.map!.getZoom()); // Center map on the coordinates
-        } else {
-            alert("Please enter valid Latitude and Longitude values.");
-        }
-    };
-    let popover = new bootstrap.Popover(document.createElement("input"), {
-        trigger: "manual",
-    });
-
-    const setWithMap = () => {
-        popover.show();
-        store.map!.once("click", function (e: any) {
-            let { lat, lng } = e.latlng; // Get clicked location coordinates
-            lng = ((((lng + 180) % 360) + 360) % 360) - 180;
-
-            store.setTxCoords(lat.toFixed(6), lng.toFixed(6)); // Update the store
-
-            // Remove the existing marker if it exists
-            if (store.currentMarker) {
-                store.map!.removeLayer(store.currentMarker as L.Marker);
-            }
-            // Add a new marker at the clicked location
-            store.currentMarker = L.marker([lat, lng], { icon: redPinMarker }).addTo(store.map as L.Map)
-            popover.hide(); // Hide the popover
-        });
-    };
-    onMounted(() => {
-        popover = new bootstrap.Popover(document.getElementById("setWithMap") as Element, {
-            trigger: "manual",
-        });
-        store.initMap(); // Initialize the map
-    });
-
+    // Add a new marker at the clicked location
+    store.currentMarker = L.marker([lat, lng], { icon: redPinMarker }).addTo(store.map as L.Map);
+    popover.hide(); // Hide the popover
+  });
+};
+onMounted(() => {
+  popover = new bootstrap.Popover(document.getElementById("setWithMap") as Element, {
+    trigger: "manual",
+  });
+  store.initMap(); // Initialize the map
+});
 </script>

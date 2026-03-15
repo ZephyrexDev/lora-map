@@ -5,10 +5,10 @@ from uuid import uuid4
 from app.db import db_connection
 from tests.conftest import insert_task, insert_tower, set_tower_geotiff
 
-
 # ===========================================================================
 # POST /predict
 # ===========================================================================
+
 
 class TestPostPredict:
     def test_returns_200_with_ids(self, client, valid_payload):
@@ -23,15 +23,11 @@ class TestPostPredict:
         body = resp.json()
 
         with db_connection() as conn:
-            tower = conn.execute(
-                "SELECT * FROM towers WHERE id = ?", (body["tower_id"],)
-            ).fetchone()
+            tower = conn.execute("SELECT * FROM towers WHERE id = ?", (body["tower_id"],)).fetchone()
             assert tower is not None
             assert tower["name"] == "Unnamed"
 
-            task = conn.execute(
-                "SELECT * FROM tasks WHERE id = ?", (body["task_id"],)
-            ).fetchone()
+            task = conn.execute("SELECT * FROM tasks WHERE id = ?", (body["task_id"],)).fetchone()
             assert task is not None
             assert task["tower_id"] == body["tower_id"]
 
@@ -39,9 +35,7 @@ class TestPostPredict:
         resp = client.post("/predict", json=valid_payload)
         body = resp.json()
         with db_connection() as conn:
-            tower = conn.execute(
-                "SELECT color FROM towers WHERE id = ?", (body["tower_id"],)
-            ).fetchone()
+            tower = conn.execute("SELECT color FROM towers WHERE id = ?", (body["tower_id"],)).fetchone()
             assert tower["color"] is not None
             assert tower["color"].startswith("#")
 
@@ -58,6 +52,7 @@ class TestPostPredict:
 # ===========================================================================
 # GET /status/{task_id}
 # ===========================================================================
+
 
 class TestGetStatus:
     def test_returns_404_for_unknown_task(self, client):
@@ -90,6 +85,7 @@ class TestGetStatus:
 # ===========================================================================
 # GET /result/{task_id}
 # ===========================================================================
+
 
 class TestGetResult:
     def test_returns_404_for_unknown_task(self, client):
@@ -132,6 +128,7 @@ class TestGetResult:
 # GET /towers
 # ===========================================================================
 
+
 class TestGetTowers:
     def test_returns_empty_list_when_no_towers(self, client):
         resp = client.get("/towers")
@@ -156,6 +153,7 @@ class TestGetTowers:
 # ===========================================================================
 # DELETE /towers/{tower_id}
 # ===========================================================================
+
 
 class TestDeleteTower:
     def test_returns_404_for_unknown_tower(self, client):

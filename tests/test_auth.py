@@ -1,7 +1,5 @@
 """Tests for admin authentication in app.auth and protected endpoints."""
 
-from uuid import uuid4
-
 import pytest
 
 from tests.conftest import insert_task, insert_tower
@@ -12,6 +10,7 @@ AUTH_PASSWORD = "s3cret"
 # ===========================================================================
 # Auth disabled (ADMIN_PASSWORD unset)
 # ===========================================================================
+
 
 class TestAuthDisabled:
     def test_post_predict_allowed(self, client, valid_payload):
@@ -34,13 +33,15 @@ class TestAuthDisabled:
 # Auth enabled — protected endpoints reject unauthenticated requests
 # ===========================================================================
 
+
 class TestAuthEnabledRejectsUnauthenticated:
     def test_post_predict_401_without_token(self, client_with_auth, valid_payload):
         assert client_with_auth.post("/predict", json=valid_payload).status_code == 401
 
     def test_post_predict_401_with_wrong_token(self, client_with_auth, valid_payload):
         resp = client_with_auth.post(
-            "/predict", json=valid_payload,
+            "/predict",
+            json=valid_payload,
             headers={"Authorization": "Bearer wrong"},
         )
         assert resp.status_code == 401
@@ -60,6 +61,7 @@ class TestAuthEnabledRejectsUnauthenticated:
 # ===========================================================================
 # Auth enabled — protected endpoints work with correct token
 # ===========================================================================
+
 
 class TestAuthEnabledWithValidToken:
     def _headers(self):
@@ -83,6 +85,7 @@ class TestAuthEnabledWithValidToken:
 # POST /auth/login
 # ===========================================================================
 
+
 class TestAuthLogin:
     def test_correct_password_returns_token(self, client_with_auth):
         resp = client_with_auth.post("/auth/login", json={"password": AUTH_PASSWORD})
@@ -98,6 +101,7 @@ class TestAuthLogin:
 # ===========================================================================
 # Public endpoints remain accessible even with auth enabled
 # ===========================================================================
+
 
 class TestPublicEndpointsWithAuth:
     def test_get_towers_no_auth_needed(self, client_with_auth):
@@ -117,6 +121,7 @@ class TestPublicEndpointsWithAuth:
 # ===========================================================================
 # Rate limiting
 # ===========================================================================
+
 
 class TestRateLimit:
     def test_allows_up_to_max_attempts(self, client_with_auth):
@@ -138,13 +143,17 @@ class TestRateLimit:
 # Malformed Authorization headers
 # ===========================================================================
 
+
 class TestMalformedAuthHeaders:
-    @pytest.mark.parametrize("header", [
-        "Basic s3cret",       # wrong scheme
-        "",                   # empty
-        "Bearer  s3cret",     # extra space
-        "Bearer",             # missing token
-    ])
+    @pytest.mark.parametrize(
+        "header",
+        [
+            "Basic s3cret",  # wrong scheme
+            "",  # empty
+            "Bearer  s3cret",  # extra space
+            "Bearer",  # missing token
+        ],
+    )
     def test_rejects_malformed_header(self, client_with_auth, header):
         resp = client_with_auth.get("/auth/check", headers={"Authorization": header})
         assert resp.status_code == 401

@@ -46,9 +46,7 @@ class TestInitDb:
 
         conn = sqlite3.connect(str(db_file))
         try:
-            cursor = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
-            )
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
             tables = sorted(row[0] for row in cursor.fetchall())
             assert tables == ["settings", "tasks", "tower_paths", "towers"]
         finally:

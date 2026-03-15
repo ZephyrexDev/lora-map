@@ -1,12 +1,12 @@
 <template>
   <div>
     <!-- Login Modal -->
-    <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+    <div id="loginModal" class="modal fade" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content bg-dark text-light">
           <div class="modal-header border-secondary">
-            <h5 class="modal-title" id="loginModalLabel" v-if="!store.isAdmin">Admin Login</h5>
-            <h5 class="modal-title" id="loginModalLabel" v-else>Logged In</h5>
+            <h5 v-if="!store.isAdmin" id="loginModalLabel" class="modal-title">Admin Login</h5>
+            <h5 v-else id="loginModalLabel" class="modal-title">Logged In</h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
@@ -14,10 +14,10 @@
               <div class="mb-3">
                 <label for="passwordInput" class="form-label">Password</label>
                 <input
-                  type="password"
-                  class="form-control"
                   id="passwordInput"
                   v-model="password"
+                  type="password"
+                  class="form-control"
                   placeholder="Enter admin password"
                   autocomplete="current-password"
                 />
@@ -26,13 +26,18 @@
                 {{ errorMessage }}
               </div>
               <button type="submit" class="btn btn-primary w-100" :disabled="loading">
-                <span v-if="loading" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                <span
+                  v-if="loading"
+                  class="spinner-border spinner-border-sm me-1"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
                 Login
               </button>
             </form>
             <div v-else class="text-center">
               <p class="mb-3">You are logged in as admin.</p>
-              <button @click="handleLogout" class="btn btn-outline-danger w-100">Logout</button>
+              <button class="btn btn-outline-danger w-100" @click="handleLogout">Logout</button>
             </div>
           </div>
         </div>
@@ -42,34 +47,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useStore } from '../store.ts'
+import { ref } from "vue";
+import { useStore } from "../store.ts";
 
-const store = useStore()
-const password = ref('')
-const errorMessage = ref('')
-const loading = ref(false)
+const store = useStore();
+const password = ref("");
+const errorMessage = ref("");
+const loading = ref(false);
 
 async function handleLogin() {
-  errorMessage.value = ''
-  loading.value = true
-  const success = await store.login(password.value)
-  loading.value = false
+  errorMessage.value = "";
+  loading.value = true;
+  const success = await store.login(password.value);
+  loading.value = false;
   if (success) {
-    password.value = ''
+    password.value = "";
     // Close the modal
-    const modalEl = document.getElementById('loginModal')
+    const modalEl = document.getElementById("loginModal");
     if (modalEl) {
-      const bootstrap = await import('bootstrap/dist/js/bootstrap.bundle.min.js')
-      const modal = bootstrap.Modal.getInstance(modalEl)
-      modal?.hide()
+      const bootstrap = await import("bootstrap/dist/js/bootstrap.bundle.min.js");
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      modal?.hide();
     }
   } else {
-    errorMessage.value = 'Invalid password. Please try again.'
+    errorMessage.value = "Invalid password. Please try again.";
   }
 }
 
 function handleLogout() {
-  store.logout()
+  store.logout();
 }
 </script>

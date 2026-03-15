@@ -2,17 +2,20 @@
 
 import pytest
 
-from app.services.splat import mismatch_loss_db
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
+from app.services.splat import mismatch_loss_db
 
 
-@pytest.mark.parametrize("swr,expected", [
-    (1.0, 0.0),
-    (1.1, 0.01),
-    (3.0, 1.25),
-    (3.5, 1.60),
-    (0.5, 0.0),   # below 1.0 → clamp to 0
-])
+@pytest.mark.parametrize(
+    "swr,expected",
+    [
+        (1.0, 0.0),
+        (1.1, 0.01),
+        (3.0, 1.25),
+        (3.5, 1.60),
+        (0.5, 0.0),  # below 1.0 → clamp to 0
+    ],
+)
 def test_mismatch_loss_db(swr, expected):
     assert mismatch_loss_db(swr) == pytest.approx(expected, abs=0.01)
 

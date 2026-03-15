@@ -45,9 +45,7 @@ class TestTowersTableConstraints:
 class TestTasksTableConstraints:
     def test_task_requires_valid_tower_id(self, db):
         with pytest.raises(sqlite3.IntegrityError):
-            db.execute(
-                "INSERT INTO tasks (id, tower_id, status) VALUES ('k1', 'nonexistent', 'processing')"
-            )
+            db.execute("INSERT INTO tasks (id, tower_id, status) VALUES ('k1', 'nonexistent', 'processing')")
             db.commit()
 
     def test_cascade_delete(self, db):
@@ -72,20 +70,14 @@ class TestTowerPathsConstraints:
     def test_unique_pair(self, db):
         db.execute("INSERT INTO towers (id, name, params) VALUES ('t1', 'A', '{}')")
         db.execute("INSERT INTO towers (id, name, params) VALUES ('t2', 'B', '{}')")
-        db.execute(
-            "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p1', 't1', 't2')"
-        )
+        db.execute("INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p1', 't1', 't2')")
         with pytest.raises(sqlite3.IntegrityError):
-            db.execute(
-                "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p2', 't1', 't2')"
-            )
+            db.execute("INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p2', 't1', 't2')")
 
     def test_cascade_delete_tower_a(self, db):
         db.execute("INSERT INTO towers (id, name, params) VALUES ('t1', 'A', '{}')")
         db.execute("INSERT INTO towers (id, name, params) VALUES ('t2', 'B', '{}')")
-        db.execute(
-            "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p1', 't1', 't2')"
-        )
+        db.execute("INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p1', 't1', 't2')")
         db.commit()
 
         db.execute("DELETE FROM towers WHERE id = 't1'")
@@ -97,9 +89,7 @@ class TestTowerPathsConstraints:
     def test_cascade_delete_tower_b(self, db):
         db.execute("INSERT INTO towers (id, name, params) VALUES ('t1', 'A', '{}')")
         db.execute("INSERT INTO towers (id, name, params) VALUES ('t2', 'B', '{}')")
-        db.execute(
-            "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p1', 't1', 't2')"
-        )
+        db.execute("INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES ('p1', 't1', 't2')")
         db.commit()
 
         db.execute("DELETE FROM towers WHERE id = 't2'")
@@ -117,9 +107,7 @@ class TestInitDbIdempotent:
 
         conn = sqlite3.connect(str(db_file))
         try:
-            tables = conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-            ).fetchall()
+            tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
             table_names = sorted(row[0] for row in tables)
             assert table_names == ["settings", "tasks", "tower_paths", "towers"]
         finally:

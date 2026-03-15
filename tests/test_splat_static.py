@@ -4,10 +4,10 @@ import pytest
 
 from app.services.splat import Splat
 
-
 # ===========================================================================
 # _create_splat_qth
 # ===========================================================================
+
 
 class TestCreateSplatQth:
     def test_basic_output_format(self):
@@ -43,6 +43,7 @@ class TestCreateSplatQth:
 # _create_splat_lrp
 # ===========================================================================
 
+
 class TestCreateSplatLrp:
     def _default_lrp(self, **overrides):
         defaults = dict(
@@ -77,12 +78,18 @@ class TestCreateSplatLrp:
         erp_value = float(erp_line.split(";")[0].strip())
         assert erp_value == pytest.approx(1.26, abs=0.01)
 
-    @pytest.mark.parametrize("climate,code", [
-        ("equatorial", "1"), ("continental_subtropical", "2"),
-        ("maritime_subtropical", "3"), ("desert", "4"),
-        ("continental_temperate", "5"), ("maritime_temperate_land", "6"),
-        ("maritime_temperate_sea", "7"),
-    ])
+    @pytest.mark.parametrize(
+        "climate,code",
+        [
+            ("equatorial", "1"),
+            ("continental_subtropical", "2"),
+            ("maritime_subtropical", "3"),
+            ("desert", "4"),
+            ("continental_temperate", "5"),
+            ("maritime_temperate_land", "6"),
+            ("maritime_temperate_sea", "7"),
+        ],
+    )
     def test_climate_mapping(self, climate, code):
         result = self._default_lrp(radio_climate=climate).decode("utf-8")
         climate_line = result.strip().split("\n")[4]
@@ -107,19 +114,20 @@ class TestCreateSplatLrp:
 # _create_splat_dcf
 # ===========================================================================
 
+
 class TestCreateSplatDcf:
     def test_returns_bytes(self):
         assert isinstance(Splat._create_splat_dcf("plasma", -130.0, -80.0), bytes)
 
     def test_contains_32_color_lines(self):
         content = Splat._create_splat_dcf("plasma", -130.0, -80.0).decode("utf-8")
-        color_lines = [l for l in content.split("\n") if ":" in l and not l.startswith(";")]
+        color_lines = [line for line in content.split("\n") if ":" in line and not line.startswith(";")]
         assert len(color_lines) == 32
 
     def test_dbm_range_matches_input(self):
         content = Splat._create_splat_dcf("viridis", -120.0, -60.0).decode("utf-8")
-        color_lines = [l for l in content.split("\n") if ":" in l and not l.startswith(";")]
-        dbm_values = [int(l.split(":")[0].strip()) for l in color_lines]
+        color_lines = [line for line in content.split("\n") if ":" in line and not line.startswith(";")]
+        dbm_values = [int(line.split(":")[0].strip()) for line in color_lines]
         assert max(dbm_values) == -60
         assert min(dbm_values) == -120
 
@@ -138,6 +146,7 @@ class TestCreateSplatDcf:
 # _colormap_to_rgb
 # ===========================================================================
 
+
 class TestColormapToRgb:
     def test_returns_correct_shape(self):
         rgb = Splat._colormap_to_rgb("plasma", -130, -80, 10)
@@ -153,22 +162,32 @@ class TestColormapToRgb:
 # _hgt_filename_to_sdf_filename
 # ===========================================================================
 
+
 class TestHgtToSdfFilename:
-    @pytest.mark.parametrize("hgt,expected_sdf,expected_hd", [
-        # Western hemisphere (lon value is offset by -1 in SPLAT! naming convention)
-        ("N51W115.hgt.gz", "51:52:114:115.sdf", "51:52:114:115-hd.sdf"),
-        ("N35W120.hgt.gz", "35:36:119:120.sdf", "35:36:119:120-hd.sdf"),
-        # Southern hemisphere
-        ("S33W071.hgt.gz", "-33:-32:70:71.sdf", "-33:-32:70:71-hd.sdf"),
-    ])
+    @pytest.mark.parametrize(
+        "hgt,expected_sdf,expected_hd",
+        [
+            # Western hemisphere (lon value is offset by -1 in SPLAT! naming convention)
+            ("N51W115.hgt.gz", "51:52:114:115.sdf", "51:52:114:115-hd.sdf"),
+            ("N35W120.hgt.gz", "35:36:119:120.sdf", "35:36:119:120-hd.sdf"),
+            # Southern hemisphere
+            ("S33W071.hgt.gz", "-33:-32:70:71.sdf", "-33:-32:70:71-hd.sdf"),
+        ],
+    )
     def test_western_hemisphere(self, hgt, expected_sdf, expected_hd):
         assert Splat._hgt_filename_to_sdf_filename(hgt, high_resolution=False) == expected_sdf
         assert Splat._hgt_filename_to_sdf_filename(hgt, high_resolution=True) == expected_hd
 
-    @pytest.mark.parametrize("hgt,expected_sdf", [
-        # Eastern hemisphere has off-by-one correction
-        ("N48E010.hgt.gz", None),  # Just check it doesn't crash and returns valid format
-    ])
+    @pytest.mark.parametrize(
+        "hgt,expected_sdf",
+        [
+            # Eastern hemisphere has off-by-one correction
+            (
+                "N48E010.hgt.gz",
+                None,
+            ),  # Just check it doesn't crash and returns valid format
+        ],
+    )
     def test_eastern_hemisphere_format(self, hgt, expected_sdf):
         result = Splat._hgt_filename_to_sdf_filename(hgt)
         assert result.endswith(".sdf")
@@ -181,6 +200,7 @@ class TestHgtToSdfFilename:
 # ===========================================================================
 # _calculate_required_terrain_tiles
 # ===========================================================================
+
 
 class TestCalculateRequiredTerrainTiles:
     def test_small_radius_single_tile(self):
@@ -199,7 +219,7 @@ class TestCalculateRequiredTerrainTiles:
 
     def test_tile_names_have_correct_format(self):
         tiles = Splat._calculate_required_terrain_tiles(40.0, -105.0, 10000)
-        for hgt, sdf, sdf_hd in tiles:
+        for hgt, _sdf, _sdf_hd in tiles:
             assert hgt[0] in ("N", "S")
             assert hgt[3] in ("E", "W")
 

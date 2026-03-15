@@ -1,23 +1,23 @@
-import { defineStore } from 'pinia';
+import { defineStore } from "pinia";
 // import { useLocalStorage } from '@vueuse/core';
-import { randanimalSync } from 'randanimal';
-import L from 'leaflet';
-import GeoRasterLayer from 'georaster-layer-for-leaflet';
-import parseGeoraster from 'georaster';
-import 'leaflet-easyprint';
-import { type Site, type SplatParams } from './types.ts';
-import { cloneObject, dbmToRgba } from './utils.ts';
-import { redPinMarker } from './layers.ts';
+import { randanimalSync } from "randanimal";
+import L from "leaflet";
+import GeoRasterLayer from "georaster-layer-for-leaflet";
+import parseGeoraster from "georaster";
+import "leaflet-easyprint";
+import { type Site, type SplatParams } from "./types.ts";
+import { cloneObject, dbmToRgba } from "./utils.ts";
+import { redPinMarker } from "./layers.ts";
 
-const useStore = defineStore('store', {
+const useStore = defineStore("store", {
   state() {
     return {
       map: undefined as undefined | L.Map,
       currentMarker: undefined as undefined | L.Marker,
       localSites: [] as Site[], //useLocalStorage('localSites', ),
-      simulationState: 'idle',
+      simulationState: "idle",
       isAdmin: false,
-      adminToken: localStorage.getItem('adminToken') || '',
+      adminToken: localStorage.getItem("adminToken") || "",
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
@@ -28,86 +28,86 @@ const useStore = defineStore('store', {
           tx_height: 2.0,
           tx_gain: 2.0,
           tx_swr: 1.0,
-          tx_color: ''
+          tx_color: "",
         },
         receiver: {
           rx_sensitivity: -130.0,
           rx_height: 1.0,
           rx_gain: 2.0,
-          rx_loss: 2.0
+          rx_loss: 2.0,
         },
         environment: {
-          radio_climate: 'continental_temperate',
-          polarization: 'vertical',
+          radio_climate: "continental_temperate",
+          polarization: "vertical",
           clutter_height: 1.0,
           ground_dielectric: 15.0,
           ground_conductivity: 0.005,
-          atmosphere_bending: 301.0
+          atmosphere_bending: 301.0,
         },
         simulation: {
           situation_fraction: 95.0,
           time_fraction: 95.0,
           simulation_extent: 30.0,
-          high_resolution: false
+          high_resolution: false,
         },
         display: {
-          color_scale: 'plasma',
+          color_scale: "plasma",
           min_dbm: -130.0,
           max_dbm: -80.0,
-          overlay_transparency: 50
+          overlay_transparency: 50,
         },
-      }
-    }
+      },
+    };
   },
   actions: {
     async login(password: string): Promise<boolean> {
       try {
-        const response = await fetch('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password }),
         });
         if (!response.ok) return false;
         const data = await response.json();
         this.adminToken = data.token;
         this.isAdmin = true;
-        localStorage.setItem('adminToken', this.adminToken);
+        localStorage.setItem("adminToken", this.adminToken);
         return true;
       } catch {
         return false;
       }
     },
     logout() {
-      this.adminToken = '';
+      this.adminToken = "";
       this.isAdmin = false;
-      localStorage.removeItem('adminToken');
+      localStorage.removeItem("adminToken");
     },
     async checkAuth(): Promise<void> {
       if (!this.adminToken) return;
       try {
-        const response = await fetch('/auth/check', {
+        const response = await fetch("/auth/check", {
           headers: { Authorization: `Bearer ${this.adminToken}` },
         });
         if (response.ok) {
           this.isAdmin = true;
         } else {
-          this.adminToken = '';
+          this.adminToken = "";
           this.isAdmin = false;
-          localStorage.removeItem('adminToken');
+          localStorage.removeItem("adminToken");
         }
       } catch {
-        this.adminToken = '';
+        this.adminToken = "";
         this.isAdmin = false;
-        localStorage.removeItem('adminToken');
+        localStorage.removeItem("adminToken");
       }
     },
     setTxCoords(lat: number, lon: number) {
-      this.splatParams.transmitter.tx_lat = lat
-      this.splatParams.transmitter.tx_lon = lon
+      this.splatParams.transmitter.tx_lat = lat;
+      this.splatParams.transmitter.tx_lon = lon;
     },
     removeSite(index: number) {
       if (!this.map) {
-        return
+        return;
       }
       const site = this.localSites[index];
       if (site && site.layer) {
@@ -124,12 +124,11 @@ const useStore = defineStore('store', {
         if (site.raster && !site.layer) {
           const minDbm = site.params?.display?.min_dbm ?? -130;
           const maxDbm = site.params?.display?.max_dbm ?? -80;
-          const hex = site.color || '#4a90d9';
+          const hex = site.color || "#4a90d9";
           const rasterLayer = new GeoRasterLayer({
             georaster: site.raster,
             resolution: 256,
-            pixelValuesToColorFn: (values: number[]) =>
-              dbmToRgba(values[0], hex, minDbm, maxDbm),
+            pixelValuesToColorFn: (values: number[]) => dbmToRgba(values[0], hex, minDbm, maxDbm),
           });
           if (!site.visible) {
             rasterLayer.setOpacity(0);
@@ -165,59 +164,72 @@ const useStore = defineStore('store', {
 
       L.control.zoom({ position: "bottomleft" }).addTo(this.map as L.Map);
 
-      const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
+      const cartoLight = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        attribution: "© OpenStreetMap contributors © CARTO",
       });
 
-      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-      })
-
-      const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri — Source: Esri, USGS, NOAA',
+      const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
       });
 
-      const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-        attribution: 'Map data: © OpenStreetMap contributors, SRTM | OpenTopoMap',
+      const satelliteLayer = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution: "Tiles © Esri — Source: Esri, USGS, NOAA",
+        },
+      );
+
+      const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        attribution: "Map data: © OpenStreetMap contributors, SRTM | OpenTopoMap",
       });
 
       streetLayer.addTo(this.map as L.Map);
 
       // Base Layers
       const baseLayers = {
-        "OSM": streetLayer,
+        OSM: streetLayer,
         "Carto Light": cartoLight,
-        "Satellite": satelliteLayer,
-        "Topo Map": topoLayer
+        Satellite: satelliteLayer,
+        "Topo Map": topoLayer,
       };
 
       // EasyPrint control
-      (L as any).easyPrint({
-        title: "Save",
-        position: "bottomleft",
-        sizeModes: ["A4Portrait", "A4Landscape"],
-        filename: "sites",
-        exportOnly: true
-      }).addTo(this.map as L.Map);
+      (L as any)
+        .easyPrint({
+          title: "Save",
+          position: "bottomleft",
+          sizeModes: ["A4Portrait", "A4Landscape"],
+          filename: "sites",
+          exportOnly: true,
+        })
+        .addTo(this.map as L.Map);
 
-      L.control.layers(baseLayers, {}, {
-        position: "bottomleft",
-      }).addTo(this.map as L.Map);
+      L.control
+        .layers(
+          baseLayers,
+          {},
+          {
+            position: "bottomleft",
+          },
+        )
+        .addTo(this.map as L.Map);
 
       this.map.on("baselayerchange", () => {
         this.localSites.forEach((site: Site) => {
           site.layer?.bringToFront();
         });
       });
-      this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site"); // Variable to hold the current marker
+      this.currentMarker = L.marker(position, { icon: redPinMarker })
+        .addTo(this.map as L.Map)
+        .bindPopup("Transmitter site"); // Variable to hold the current marker
       this.redrawSites();
       this.loadTowers();
     },
     async loadTowers() {
       try {
-        const response = await fetch('/towers');
+        const response = await fetch("/towers");
         if (!response.ok) {
-          console.warn('Failed to load towers:', response.statusText);
+          console.warn("Failed to load towers:", response.statusText);
           return;
         }
         const towers = await response.json();
@@ -228,26 +240,42 @@ const useStore = defineStore('store', {
           }
           const site: Site = {
             params: tower.params ?? {
-              transmitter: { name: tower.name ?? 'Unknown', tx_lat: tower.lat ?? 0, tx_lon: tower.lon ?? 0, tx_power: 0, tx_freq: 0, tx_height: 0, tx_gain: 0, tx_swr: 1 },
+              transmitter: {
+                name: tower.name ?? "Unknown",
+                tx_lat: tower.lat ?? 0,
+                tx_lon: tower.lon ?? 0,
+                tx_power: 0,
+                tx_freq: 0,
+                tx_height: 0,
+                tx_gain: 0,
+                tx_swr: 1,
+              },
               receiver: { rx_sensitivity: -130, rx_height: 1, rx_gain: 2, rx_loss: 2 },
-              environment: { radio_climate: 'continental_temperate', polarization: 'vertical', clutter_height: 1, ground_dielectric: 15, ground_conductivity: 0.005, atmosphere_bending: 301 },
+              environment: {
+                radio_climate: "continental_temperate",
+                polarization: "vertical",
+                clutter_height: 1,
+                ground_dielectric: 15,
+                ground_conductivity: 0.005,
+                atmosphere_bending: 301,
+              },
               simulation: { situation_fraction: 95, time_fraction: 95, simulation_extent: 30, high_resolution: false },
-              display: { color_scale: 'plasma', min_dbm: -130, max_dbm: -80, overlay_transparency: 50 },
+              display: { color_scale: "plasma", min_dbm: -130, max_dbm: -80, overlay_transparency: 50 },
             },
-            taskId: tower.task_id ?? '',
+            taskId: tower.task_id ?? "",
             raster: null,
             layer: undefined,
             visible: true,
-            color: tower.color || tower.params?.transmitter?.tx_color || '#4a90d9',
+            color: tower.color || tower.params?.transmitter?.tx_color || "#4a90d9",
           };
           this.localSites.push(site);
         }
       } catch (err) {
-        console.warn('Error loading towers:', err);
+        console.warn("Error loading towers:", err);
       }
     },
     async runSimulation() {
-      console.log('Simulation running...')
+      console.log("Simulation running...");
       try {
         // Collect input values
         const payload = {
@@ -287,7 +315,7 @@ const useStore = defineStore('store', {
         };
 
         console.log("Payload:", payload);
-        this.simulationState = 'running';
+        this.simulationState = "running";
 
         // Send the request to the backend's /predict endpoint
         const headers: Record<string, string> = {
@@ -304,7 +332,7 @@ const useStore = defineStore('store', {
         });
 
         if (!predictResponse.ok) {
-          this.simulationState = 'failed';
+          this.simulationState = "failed";
           const errorDetails = await predictResponse.text();
           throw new Error(`Failed to start prediction: ${errorDetails}`);
         }
@@ -322,14 +350,12 @@ const useStore = defineStore('store', {
         const pollStatus = async () => {
           if (retryCount >= maxRetries) {
             console.error(`Polling timed out after ${retryCount} retries.`);
-            this.simulationState = 'failed';
+            this.simulationState = "failed";
             return;
           }
           retryCount++;
 
-          const statusResponse = await fetch(
-            `/status/${taskId}`,
-          );
+          const statusResponse = await fetch(`/status/${taskId}`);
           if (!statusResponse.ok) {
             throw new Error("Failed to fetch task status.");
           }
@@ -338,29 +364,24 @@ const useStore = defineStore('store', {
           console.log("Task status:", statusData);
 
           if (statusData.status === "completed") {
-            this.simulationState = 'completed';
+            this.simulationState = "completed";
             console.log("Simulation completed! Adding result to the map...");
 
             // Fetch the GeoTIFF data
-            const resultResponse = await fetch(
-              `/result/${taskId}`,
-            );
+            const resultResponse = await fetch(`/result/${taskId}`);
             if (!resultResponse.ok) {
               throw new Error("Failed to fetch simulation result.");
-            }
-            else
-            {
+            } else {
               const arrayBuffer = await resultResponse.arrayBuffer();
               const geoRaster = await parseGeoraster(arrayBuffer);
 
-              const siteColor = this.splatParams.transmitter.tx_color || '#4a90d9';
+              const siteColor = this.splatParams.transmitter.tx_color || "#4a90d9";
               const simMinDbm = this.splatParams.display.min_dbm;
               const simMaxDbm = this.splatParams.display.max_dbm;
               const rasterLayer = new GeoRasterLayer({
                 georaster: geoRaster,
                 resolution: 256,
-                pixelValuesToColorFn: (values: number[]) =>
-                  dbmToRgba(values[0], siteColor, simMinDbm, simMaxDbm),
+                pixelValuesToColorFn: (values: number[]) => dbmToRgba(values[0], siteColor, simMinDbm, simMaxDbm),
               });
               rasterLayer.addTo(this.map as L.Map);
               rasterLayer.bringToFront();
@@ -376,9 +397,8 @@ const useStore = defineStore('store', {
               this.currentMarker!.removeFrom(this.map as L.Map);
               this.splatParams.transmitter.name = await randanimalSync();
             }
-          }
-          else if (statusData.status === "failed") {
-            this.simulationState = 'failed';
+          } else if (statusData.status === "failed") {
+            this.simulationState = "failed";
           } else {
             setTimeout(pollStatus, currentInterval);
             currentInterval = Math.min(currentInterval * 2, maxInterval); // Exponential backoff, capped at 10s
@@ -389,8 +409,8 @@ const useStore = defineStore('store', {
       } catch (error) {
         console.error("Error:", error);
       }
-    }
-  }
+    },
+  },
 });
 
-export { useStore }
+export { useStore };

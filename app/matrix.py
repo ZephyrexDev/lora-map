@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from itertools import product
-from typing import Any
 
 DEFAULT_MATRIX_CONFIG: dict[str, list[str]] = {
     "hardware": ["v3", "v4"],
-    "antennas": ["ribbed_spring_helical", "duck_stubby", "bingfu_whip", "slinkdsco_omni"],
+    "antennas": [
+        "ribbed_spring_helical",
+        "duck_stubby",
+        "bingfu_whip",
+        "slinkdsco_omni",
+    ],
     "terrain": ["bare_earth"],
 }
 
@@ -27,9 +31,7 @@ def get_matrix_config(conn: sqlite3.Connection) -> dict[str, list[str]]:
 
     Returns the default config when no row exists.
     """
-    row = conn.execute(
-        "SELECT value FROM settings WHERE key = ?", (_SETTINGS_KEY,)
-    ).fetchone()
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (_SETTINGS_KEY,)).fetchone()
     if row is None:
         return dict(DEFAULT_MATRIX_CONFIG)
     return json.loads(row["value"])
@@ -37,7 +39,7 @@ def get_matrix_config(conn: sqlite3.Connection) -> dict[str, list[str]]:
 
 def set_matrix_config(conn: sqlite3.Connection, config: dict[str, list[str]]) -> None:
     """Upsert the matrix config into the settings table."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)"
         " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
@@ -59,7 +61,4 @@ def get_matrix_combinations(config: dict[str, list[str]]) -> list[dict[str, str]
     if not hardware or not antennas or not terrain:
         return []
 
-    return [
-        {"hardware": h, "antenna": a, "terrain": t}
-        for h, a, t in product(hardware, antennas, terrain)
-    ]
+    return [{"hardware": h, "antenna": a, "terrain": t} for h, a, t in product(hardware, antennas, terrain)]

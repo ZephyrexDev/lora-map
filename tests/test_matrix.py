@@ -59,8 +59,16 @@ class TestSetMatrixConfig:
         assert result == custom
 
     def test_upsert_overwrites_previous_value(self):
-        first = {"hardware": ["v3"], "antennas": ["duck_stubby"], "terrain": ["bare_earth"]}
-        second = {"hardware": ["v4"], "antennas": ["bingfu_whip"], "terrain": ["lulc_clutter"]}
+        first = {
+            "hardware": ["v3"],
+            "antennas": ["duck_stubby"],
+            "terrain": ["bare_earth"],
+        }
+        second = {
+            "hardware": ["v4"],
+            "antennas": ["bingfu_whip"],
+            "terrain": ["lulc_clutter"],
+        }
         with db_connection() as conn:
             set_matrix_config(conn, first)
             set_matrix_config(conn, second)
@@ -77,11 +85,23 @@ class TestGetMatrixCombinations:
         }
         combos = get_matrix_combinations(config)
         assert len(combos) == 4  # 2 x 2 x 1
-        assert {"hardware": "v3", "antenna": "bingfu_whip", "terrain": "bare_earth"} in combos
-        assert {"hardware": "v4", "antenna": "slinkdsco_omni", "terrain": "bare_earth"} in combos
+        assert {
+            "hardware": "v3",
+            "antenna": "bingfu_whip",
+            "terrain": "bare_earth",
+        } in combos
+        assert {
+            "hardware": "v4",
+            "antenna": "slinkdsco_omni",
+            "terrain": "bare_earth",
+        } in combos
 
     def test_empty_hardware_returns_empty(self):
-        config = {"hardware": [], "antennas": ["duck_stubby"], "terrain": ["bare_earth"]}
+        config = {
+            "hardware": [],
+            "antennas": ["duck_stubby"],
+            "terrain": ["bare_earth"],
+        }
         assert get_matrix_combinations(config) == []
 
     def test_empty_antennas_returns_empty(self):

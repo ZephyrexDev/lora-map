@@ -9,9 +9,7 @@ from itertools import product
 _GREYSCALE = {(0, 0, 0), (128, 128, 128), (255, 255, 255)}
 
 PALETTE: list[str] = [
-    f"#{r:02x}{g:02x}{b:02x}"
-    for r, g, b in product((0, 128, 255), repeat=3)
-    if (r, g, b) not in _GREYSCALE
+    f"#{r:02x}{g:02x}{b:02x}" for r, g, b in product((0, 128, 255), repeat=3) if (r, g, b) not in _GREYSCALE
 ]
 
 

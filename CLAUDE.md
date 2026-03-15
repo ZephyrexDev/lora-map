@@ -77,7 +77,7 @@ podman-compose up         # Dev convenience (optional)
 
 - Target Python 3.11. Use modern syntax: `match`, `|` union types, f-strings.
 - Use type hints on all function signatures. Use Pydantic models for API boundaries.
-- Follow PEP 8 strictly. All code must be formatted with **Black** (line length 88). Lint with **Ruff** (`ruff check`).
+- Follow PEP 8 strictly. All code must be formatted with **Black** (line length 120). Lint with **Ruff** (`ruff check`).
 - Use snake_case for functions, variables, and modules. Use PascalCase for classes.
 - **Favor object-oriented design.** Group related state and behavior into classes. Use inheritance and composition to share logic — prefer composition when the relationship is "has-a", inheritance when "is-a". Avoid loose collections of module-level functions when a class would reduce parameter passing and improve cohesion.
 - **Minimize code volume.** Consolidate duplicate logic into shared base classes, mixins, or utility methods. If two pieces of code do similar things, refactor them behind a common abstraction. Shorter is better when clarity is preserved.

@@ -39,13 +39,11 @@ class TestAntennaEntries:
         for antenna in data["antennas"]:
             swr = antenna["swr"]
             reflection = (swr - 1) / (swr + 1)
-            mismatch_loss = -10 * math.log10(1 - reflection ** 2)
-            assert mismatch_loss >= 0, (
-                f"Mismatch loss for {antenna['name']} should be non-negative, got {mismatch_loss}"
-            )
-            assert math.isfinite(mismatch_loss), (
-                f"Mismatch loss for {antenna['name']} is not finite (SWR={swr})"
-            )
+            mismatch_loss = -10 * math.log10(1 - reflection**2)
+            assert (
+                mismatch_loss >= 0
+            ), f"Mismatch loss for {antenna['name']} should be non-negative, got {mismatch_loss}"
+            assert math.isfinite(mismatch_loss), f"Mismatch loss for {antenna['name']} is not finite (SWR={swr})"
 
 
 class TestFrequencyEntries:

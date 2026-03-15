@@ -51,7 +51,12 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 """
 
-ALL_SCHEMAS: list[str] = [SCHEMA_TOWERS, SCHEMA_TASKS, SCHEMA_TOWER_PATHS, SCHEMA_SETTINGS]
+ALL_SCHEMAS: list[str] = [
+    SCHEMA_TOWERS,
+    SCHEMA_TASKS,
+    SCHEMA_TOWER_PATHS,
+    SCHEMA_SETTINGS,
+]
 
 
 def init_db(db_path: str | Path) -> None:

@@ -53,14 +53,20 @@ _ACCEPT_REJECT = [
 ]
 
 
-@pytest.mark.parametrize("field,valid,invalid", _ACCEPT_REJECT,
-                         ids=[f"{f}={v}" for f, v, _ in _ACCEPT_REJECT])
+@pytest.mark.parametrize(
+    "field,valid,invalid",
+    _ACCEPT_REJECT,
+    ids=[f"{f}={v}" for f, v, _ in _ACCEPT_REJECT],
+)
 def test_field_accepts_boundary(field, valid, invalid):
     assert getattr(_make(**{field: valid}), field) == pytest.approx(valid)
 
 
-@pytest.mark.parametrize("field,valid,invalid", _ACCEPT_REJECT,
-                         ids=[f"{f}={i}" for f, _, i in _ACCEPT_REJECT])
+@pytest.mark.parametrize(
+    "field,valid,invalid",
+    _ACCEPT_REJECT,
+    ids=[f"{f}={i}" for f, _, i in _ACCEPT_REJECT],
+)
 def test_field_rejects_out_of_bounds(field, valid, invalid):
     with pytest.raises(ValidationError):
         _make(**{field: invalid})
@@ -69,6 +75,7 @@ def test_field_rejects_out_of_bounds(field, valid, invalid):
 # ---------------------------------------------------------------------------
 # Fraction fields: gt=1, le=100 (special boundary — 1.0 itself is invalid)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("field", ["situation_fraction", "time_fraction"])
 class TestFractionBounds:
@@ -92,8 +99,12 @@ class TestFractionBounds:
 # ---------------------------------------------------------------------------
 
 _VALID_CLIMATES = [
-    "equatorial", "continental_subtropical", "maritime_subtropical",
-    "desert", "continental_temperate", "maritime_temperate_land",
+    "equatorial",
+    "continental_subtropical",
+    "maritime_subtropical",
+    "desert",
+    "continental_temperate",
+    "maritime_temperate_land",
     "maritime_temperate_sea",
 ]
 

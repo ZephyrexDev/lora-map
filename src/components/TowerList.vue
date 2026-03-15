@@ -1,10 +1,10 @@
 <template>
   <div>
-    <ul class="list-group" v-if="store.localSites.length > 0">
+    <ul v-if="store.localSites.length > 0" class="list-group">
       <li
-        class="list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2"
         v-for="(site, index) in store.localSites"
         :key="site.taskId"
+        class="list-group-item list-group-item-dark d-flex justify-content-between align-items-center py-1 px-2"
       >
         <span class="text-truncate me-2" :class="{ 'text-muted': !site.visible }">
           <span
@@ -29,7 +29,9 @@
             class="btn btn-sm btn-outline-danger py-0 px-1"
             title="Delete tower"
             @click="store.removeSite(index)"
-          >&#x1F5D1;&#xFE0F;</button>
+          >
+            &#x1F5D1;&#xFE0F;
+          </button>
         </span>
       </li>
     </ul>
@@ -38,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { useStore } from '../store.ts'
+import { useStore } from "../store.ts";
 
-const store = useStore()
+const store = useStore();
 </script>

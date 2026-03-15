@@ -34,12 +34,14 @@ def _check_rate_limit(client_ip: str) -> None:
     attempts.append(now)
     _login_attempts[client_ip] = attempts
 
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 # ---------------------------------------------------------------------------
 # Dependency
 # ---------------------------------------------------------------------------
+
 
 async def require_admin(
     authorization: Annotated[str | None, Header()] = None,
@@ -65,6 +67,7 @@ async def require_admin(
 # ---------------------------------------------------------------------------
 # Auth endpoints
 # ---------------------------------------------------------------------------
+
 
 class LoginRequest(BaseModel):
     password: str

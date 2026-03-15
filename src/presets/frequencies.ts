@@ -1,4 +1,4 @@
-import presets from './presets.json';
+import presets from "./presets.json";
 
 export interface FrequencyPreset {
   region: string;

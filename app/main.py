@@ -19,7 +19,7 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -27,13 +27,12 @@ from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.auth import require_admin, router as auth_router
+from app.auth import require_admin
+from app.auth import router as auth_router
 from app.colors import next_tower_color
 from app.db import db_connection, init_db
 from app.db.connection import DEFAULT_DB_PATH
 from app.matrix import (
-    DEFAULT_MATRIX_CONFIG,
-    get_matrix_combinations,
     get_matrix_config,
     set_matrix_config,
 )
@@ -72,7 +71,7 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
         geotiff_data: bytes = splat_service.coverage_prediction(request)
 
         with db_connection() as conn:
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             conn.execute(
                 "UPDATE towers SET geotiff = ?, updated_at = ? WHERE id = ?",
                 (geotiff_data, now, tower_id),
@@ -116,8 +115,7 @@ async def predict(
 
     with db_connection() as conn:
         existing_colors: list[str] = [
-            row["color"]
-            for row in conn.execute("SELECT color FROM towers WHERE color IS NOT NULL").fetchall()
+            row["color"] for row in conn.execute("SELECT color FROM towers WHERE color IS NOT NULL").fetchall()
         ]
         color: str = payload.color if payload.color else next_tower_color(existing_colors)
 
@@ -146,9 +144,7 @@ async def get_status(task_id: str) -> JSONResponse:
         JSONResponse with the task status, or 404 if not found.
     """
     with db_connection() as conn:
-        row = conn.execute(
-            "SELECT status, error FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+        row = conn.execute("SELECT status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
     if row is None:
         logger.warning("Task %s not found.", task_id)
@@ -175,9 +171,7 @@ async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
         StreamingResponse with the GeoTIFF on success, or JSONResponse with status.
     """
     with db_connection() as conn:
-        task_row = conn.execute(
-            "SELECT tower_id, status, error FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+        task_row = conn.execute("SELECT tower_id, status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
         if task_row is None:
             logger.warning("Task %s not found.", task_id)
@@ -186,9 +180,7 @@ async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
         status: str = task_row["status"]
 
         if status == "completed":
-            tower_row = conn.execute(
-                "SELECT geotiff FROM towers WHERE id = ?", (task_row["tower_id"],)
-            ).fetchone()
+            tower_row = conn.execute("SELECT geotiff FROM towers WHERE id = ?", (task_row["tower_id"],)).fetchone()
 
             if tower_row is None or tower_row["geotiff"] is None:
                 logger.error("No GeoTIFF data found for completed task %s.", task_id)
@@ -198,15 +190,11 @@ async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
             return StreamingResponse(
                 geotiff_file,
                 media_type="image/tiff",
-                headers={
-                    "Content-Disposition": f"attachment; filename={task_id}.tif"
-                },
+                headers={"Content-Disposition": f"attachment; filename={task_id}.tif"},
             )
 
         if status == "failed":
-            return JSONResponse(
-                {"task_id": task_id, "status": "failed", "error": task_row["error"]}
-            )
+            return JSONResponse({"task_id": task_id, "status": "failed", "error": task_row["error"]})
 
         logger.info("Task %s is still processing.", task_id)
         return JSONResponse({"task_id": task_id, "status": "processing"})
@@ -220,9 +208,7 @@ async def list_towers() -> JSONResponse:
         JSONResponse with a list of tower objects.
     """
     with db_connection() as conn:
-        rows = conn.execute(
-            "SELECT id, name, color, params, created_at, updated_at FROM towers"
-        ).fetchall()
+        rows = conn.execute("SELECT id, name, color, params, created_at, updated_at FROM towers").fetchall()
 
     towers: list[dict[str, Any]] = [
         {
