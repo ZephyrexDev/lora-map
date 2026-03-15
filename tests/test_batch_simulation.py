@@ -1,5 +1,9 @@
 """Tests for batch simulation backend (matrix-driven simulations)."""
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from unittest.mock import patch
 from uuid import uuid4
 

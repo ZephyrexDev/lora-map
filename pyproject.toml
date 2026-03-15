@@ -38,3 +38,6 @@ select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "slow: marks tests that require SPLAT! binaries or heavy I/O (deselect with '-m \"not slow\"')",
+]

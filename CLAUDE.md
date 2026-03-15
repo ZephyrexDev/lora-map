@@ -68,7 +68,8 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8080
 
 # Testing
 pnpm run test             # Frontend tests (Vitest)
-uv run pytest -v          # Backend tests (pytest)
+uv run pytest             # Fast unit tests only (default)
+uv run pytest --run-slow  # All tests including SPLAT! integration
 
 # Linting & Formatting
 uv run black app/ tests/  # Format Python (line length 120)

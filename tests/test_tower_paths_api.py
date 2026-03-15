@@ -1,5 +1,9 @@
 """Tests for the tower-paths API endpoints in app.main."""
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from uuid import uuid4
 
 from app.db import db_connection

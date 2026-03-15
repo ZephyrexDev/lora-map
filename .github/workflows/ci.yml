@@ -16,7 +16,7 @@ jobs:
           python-version: "3.11"
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --dev
-      - run: uv run pytest -v
+      - run: uv run pytest -v --run-slow
 
   test-frontend:
     runs-on: ubuntu-latest

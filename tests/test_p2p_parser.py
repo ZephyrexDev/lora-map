@@ -1,5 +1,9 @@
 """Tests for the SPLAT! P2P output parser in app.services.splat."""
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from app.services.splat import Splat
 
 

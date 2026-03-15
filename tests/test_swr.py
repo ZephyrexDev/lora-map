@@ -2,6 +2,8 @@
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.services.splat import Splat
 

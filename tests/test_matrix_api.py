@@ -1,5 +1,9 @@
 """Tests for the matrix config API endpoints in app.main."""
 
+import pytest
+
+pytestmark = pytest.mark.slow
+
 from app.db import db_connection
 from app.matrix import DEFAULT_MATRIX_CONFIG, set_matrix_config
 from app.models.MatrixConfigRequest import MatrixConfigRequest

@@ -2,6 +2,8 @@
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 from app.services.splat import Splat
 
 # ===========================================================================

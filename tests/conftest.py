@@ -39,6 +39,23 @@ import app.auth as auth_mod  # noqa: E402
 from app.db import db_connection, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 
+
+# ---------------------------------------------------------------------------
+# Slow-test gating via --run-slow CLI flag
+# ---------------------------------------------------------------------------
+
+
+def pytest_addoption(parser):
+    parser.addoption("--run-slow", action="store_true", default=False, help="Run slow integration tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--run-slow"):
+        skip_slow = pytest.mark.skip(reason="need --run-slow option to run")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skip_slow)
+
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
