@@ -107,6 +107,7 @@ podman-compose up         # Dev convenience (optional)
 - Use template literals over string concatenation.
 - Never use `console.log` in committed code. Use `console.warn` or `console.error` for diagnostics.
 - **No inline HTML event handlers.** Never use `onclick`, `onload`, or similar attributes in dynamically constructed HTML (e.g., Leaflet popups, template literals). Use `addEventListener` after DOM insertion instead.
+- **No HTML string interpolation with external data.** Never pass untrusted or backend-supplied values into HTML strings (e.g., Leaflet `bindPopup(\`<b>${data}</b>\`)`, `L.divIcon({ html })`, or any DOM API that parses HTML). Build content with `document.createElement` and `textContent` instead. Only use HTML strings for static markup with developer-controlled values like coordinates or fixed labels.
 - **No magic numbers.** Extract timeouts, poll intervals, zoom levels, and other numeric constants to named `const` declarations at the top of the file.
 - **Preset dropdowns keyed by stable identifiers.** Use `name`, `code`, or `label` as `<option>` values — never array indices, which break when order changes.
 - **Clean up lifecycle resources.** Capture all timer IDs from `setTimeout`/`setInterval` and clear them in `onUnmounted`. Dispose Bootstrap instances (Popover, Tooltip, Modal) in `onUnmounted`. Never leave dangling event listeners or orphaned timers.
