@@ -222,7 +222,23 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Add toggle to show/hide mesh path overlay independently from coverage layers
 - [x] Recalculate affected paths when a tower is added or removed
 
-## 15. Mobile / responsive design
+## 15. Backend audit — API conventions, DRY, dead code
+
+### API convention violations
+- [x] `POST /predict` returns 200 — should return 201 Created (resource creation)
+- [x] `POST /tower-paths` returns 200 — should return 202 Accepted (queues background work)
+- [x] `PUT /matrix/config` accepts `dict[str, Any]` — should use a Pydantic model like all other mutation endpoints
+- [x] `/simulations/{tower_id}/aggregate` collides with `/simulations/{sim_id}/result` — move aggregate to `/towers/{tower_id}/aggregate`
+
+### DRY violations
+- [x] `get_result` and `get_simulation_result` duplicate GeoTIFF-or-status streaming logic — extract shared helper
+- [x] `delete_tower` and `delete_tower_path` duplicate delete-check-rowcount-404 pattern — extract helper
+- [x] Background task error handling in `run_splat` and `run_matrix_simulations` duplicates try/update-db/except/update-error pattern — extract helper
+
+### Dead code
+- [x] `Splat.bucket_name` and `Splat.bucket_prefix` stored on instance but unused after terrain provider extraction — remove
+
+## 16. Mobile / responsive design
 
 ### Critical
 - [x] Add responsive breakpoints to all form columns (`col-12 col-sm-6` instead of fixed `col-6`) across Transmitter, Receiver, Environment, Simulation, Display, ClientSelector components
@@ -253,3 +269,12 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Increase tower color circle size in TowerList — 10px → 12px
 - [x] Fix suggestion marker popup width on small screens — `min-width: 200px` → `max-width: min(200px, 80vw)`
 - [x] Add landscape-specific media query to reduce offcanvas height on landscape phones
+
+### Round 3 — Medium
+- [x] Remove hardcoded `<br />` in Environment.vue "Clutter Height" label — use natural text flow
+- [x] Stack "Set with Map" / "Center map on transmitter" buttons vertically on mobile — `flex-column flex-sm-row`
+- [x] Make "Run Simulation" button sticky at bottom of offcanvas — `sticky-bottom bg-dark`
+- [x] Add `flex-shrink-0` to antenna mismatch loss badge to prevent compression on narrow widths
+
+### Round 3 — Minor
+- [x] Increase offcanvas close button touch target for mobile — added `p-3` padding

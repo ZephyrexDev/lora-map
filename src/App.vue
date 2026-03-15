@@ -61,7 +61,7 @@
             <h5 id="offcanvasDarkNavbarLabel" class="offcanvas-title">Site Parameters</h5>
             <button
               type="button"
-              class="btn-close btn-close-white"
+              class="btn-close btn-close-white p-3"
               data-bs-dismiss="offcanvas"
               aria-label="Close"
             ></button>
@@ -168,7 +168,7 @@
                   </ul>
                 </li>
               </ul>
-              <div class="mt-3 d-flex gap-2">
+              <div class="mt-3 d-flex gap-2 sticky-bottom bg-dark py-2" style="z-index: 1">
                 <button
                   id="runSimulation"
                   :disabled="store.simulationState === 'running'"

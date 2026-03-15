@@ -23,7 +23,7 @@
         <div class="invalid-feedback">Please select a polarization type.</div>
       </div>
       <div class="col-12 col-sm-6">
-        <label for="clutter_height" class="form-label">Clutter Height <br />(m)</label>
+        <label for="clutter_height" class="form-label">Clutter Height (m)</label>
         <input
           id="clutter_height"
           v-model="environment.clutter_height"

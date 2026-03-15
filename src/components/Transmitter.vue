@@ -115,7 +115,7 @@
           </select>
           <span
             v-if="mismatchLossBadge !== null"
-            class="badge bg-warning text-dark"
+            class="badge bg-warning text-dark flex-shrink-0"
             style="white-space: nowrap; font-size: max(0.75rem, 12px)"
           >
             (-{{ mismatchLossBadge }} dB)
@@ -199,7 +199,7 @@
         <div class="invalid-feedback">Gain must be a positive number.</div>
       </div>
     </div>
-    <div class="mt-3 d-flex gap-2">
+    <div class="mt-3 d-flex flex-column flex-sm-row gap-2">
       <button
         id="setWithMap"
         type="button"
