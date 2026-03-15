@@ -34,7 +34,7 @@ const useStore = defineStore("store", {
       currentMarker: undefined as undefined | L.Marker,
       localSites: [] as Site[],
       overlapLayer: undefined as undefined | L.GridLayer,
-      simulationState: "idle",
+      simulationState: "idle" as "idle" | "running" | "completed" | "failed",
       simulationError: "" as string,
       isAdmin: false,
       adminToken: localStorage.getItem("adminToken") ?? "",
@@ -687,7 +687,7 @@ const useStore = defineStore("store", {
                 visible: true,
               });
               this.currentMarker?.removeFrom(this.map as L.Map);
-              this.splatParams.transmitter.name = await randanimalSync();
+              this.splatParams.transmitter.name = randanimalSync();
               this.redrawSites();
               this.updateOverlapLayer();
               // Reload tower paths after backend has time to compute
