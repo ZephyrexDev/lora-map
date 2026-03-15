@@ -5,7 +5,6 @@ from uuid import uuid4
 
 from app.db import db_connection
 from app.matrix import get_matrix_combinations, get_matrix_config
-from tests.conftest import insert_tower
 
 
 class TestPredictCreatesSimulations:
