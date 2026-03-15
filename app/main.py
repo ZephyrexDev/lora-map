@@ -41,6 +41,7 @@ from app.matrix import (
 )
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.models.DeadzoneResponse import DeadzoneAnalysisResponse
+from app.services.aggregate import compute_weighted_aggregate
 from app.services.deadzone import DeadzoneAnalyzer
 from app.services.splat import Splat
 
@@ -443,7 +444,7 @@ _KNOWN_ANTENNAS = {
     "bingfu_whip",
     "slinkdsco_omni",
 }
-_KNOWN_TERRAIN = {"bare_earth", "dsm", "lulc_clutter"}
+_KNOWN_TERRAIN = {"bare_earth", "dsm", "lulc_clutter", "weighted_aggregate"}
 
 
 @app.get("/matrix/config")

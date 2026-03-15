@@ -50,7 +50,7 @@
         :class="store.showTowerPaths ? 'btn-outline-info' : 'btn-outline-secondary'"
         @click="store.toggleTowerPaths()"
       >
-        {{ store.showTowerPaths ? 'Hide Mesh Paths' : 'Show Mesh Paths' }}
+        {{ store.showTowerPaths ? "Hide Mesh Paths" : "Show Mesh Paths" }}
       </button>
       <button
         v-if="store.isAdmin"
@@ -132,22 +132,22 @@ onUnmounted(() => {
 
 async function recomputePaths(): Promise<void> {
   try {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (store.adminToken) {
-      headers['Authorization'] = `Bearer ${store.adminToken}`;
+      headers["Authorization"] = `Bearer ${store.adminToken}`;
     }
-    const response = await fetch('/tower-paths', {
-      method: 'POST',
+    const response = await fetch("/tower-paths", {
+      method: "POST",
       headers,
     });
     if (!response.ok) {
-      console.warn('Failed to recompute paths:', response.statusText);
+      console.warn("Failed to recompute paths:", response.statusText);
       return;
     }
     // Wait a few seconds for background tasks, then reload
     setTimeout(() => store.loadTowerPaths(), 5000);
   } catch (err) {
-    console.warn('Error recomputing paths:', err);
+    console.warn("Error recomputing paths:", err);
   }
 }
 </script>

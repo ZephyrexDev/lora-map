@@ -1,55 +1,62 @@
-import { defineStore } from 'pinia';
-import { randanimalSync } from 'randanimal';
-import L from 'leaflet';
-import GeoRasterLayer from 'georaster-layer-for-leaflet';
-import parseGeoraster from 'georaster';
-import 'leaflet-easyprint';
-import { type Site, type SplatParams, type MatrixConfig, type TowerPath, type DeadzoneAnalysis, type TowerInfo } from './types.ts';
-import { cloneObject } from './utils.ts';
-import { redPinMarker } from './layers.ts';
-import { createOverlapHatchLayer } from './layers/OverlapHatchLayer.ts';
-import { DeadzoneCanvasLayer } from './deadzoneLayer.ts';
+import { defineStore } from "pinia";
+import { randanimalSync } from "randanimal";
+import L from "leaflet";
+import GeoRasterLayer from "georaster-layer-for-leaflet";
+import parseGeoraster from "georaster";
+import "leaflet-easyprint";
+import {
+  type Site,
+  type SplatParams,
+  type MatrixConfig,
+  type TowerPath,
+  type DeadzoneAnalysis,
+  type TowerInfo,
+} from "./types.ts";
+import { cloneObject } from "./utils.ts";
+import { redPinMarker } from "./layers.ts";
+import { createOverlapHatchLayer } from "./layers/OverlapHatchLayer.ts";
+import { DeadzoneCanvasLayer } from "./deadzoneLayer.ts";
 
 /**
  * Map path loss (dB) and LOS status to a color for polyline rendering.
  * Green = good (low loss, LOS), yellow = marginal, red = poor (high loss or NLOS).
  */
 function pathLossColor(pathLossDb: number, hasLos: boolean | null): string {
-  if (hasLos === false) return '#e74c3c'; // red for NLOS
-  if (pathLossDb < 100) return '#2ecc71';
-  if (pathLossDb < 120) return '#f1c40f';
-  if (pathLossDb < 140) return '#e67e22';
-  return '#e74c3c';
+  if (hasLos === false) return "#e74c3c"; // red for NLOS
+  if (pathLossDb < 100) return "#2ecc71";
+  if (pathLossDb < 120) return "#f1c40f";
+  if (pathLossDb < 140) return "#e67e22";
+  return "#e74c3c";
 }
 
 // Default tower colors for visual differentiation
 const TOWER_COLORS = [
-  '#e6194b', // red
-  '#3cb44b', // green
-  '#4363d8', // blue
-  '#f58231', // orange
-  '#911eb4', // purple
-  '#42d4f4', // cyan
-  '#f032e6', // magenta
-  '#bfef45', // lime
-  '#fabed4', // pink
-  '#469990', // teal
-  '#dcbeff', // lavender
-  '#9a6324', // brown
+  "#e6194b", // red
+  "#3cb44b", // green
+  "#4363d8", // blue
+  "#f58231", // orange
+  "#911eb4", // purple
+  "#42d4f4", // cyan
+  "#f032e6", // magenta
+  "#bfef45", // lime
+  "#fabed4", // pink
+  "#469990", // teal
+  "#dcbeff", // lavender
+  "#9a6324", // brown
 ];
 
-const useStore = defineStore('store', {
+const useStore = defineStore("store", {
   state() {
     return {
       map: undefined as undefined | L.Map,
       currentMarker: undefined as undefined | L.Marker,
       localSites: [] as Site[],
       overlapLayer: undefined as undefined | L.GridLayer,
-      simulationState: 'idle',
+      simulationState: "idle",
       isAdmin: false,
-      adminToken: localStorage.getItem('adminToken') || '',
-      clientHardware: 'v3' as string,
-      clientAntenna: 'bingfu_whip' as string,
+      adminToken: localStorage.getItem("adminToken") || "",
+      clientHardware: "v3" as string,
+      clientAntenna: "bingfu_whip" as string,
       towerPaths: [] as TowerPath[],
       towerPathLayers: [] as L.Polyline[],
       showTowerPaths: true,
@@ -66,61 +73,61 @@ const useStore = defineStore('store', {
           tx_power: 0.1,
           tx_freq: 907.0,
           tx_height: 2.0,
-          tx_gain: 2.0
+          tx_gain: 2.0,
         },
         receiver: {
           rx_sensitivity: -130.0,
           rx_height: 1.0,
           rx_gain: 2.0,
-          rx_loss: 2.0
+          rx_loss: 2.0,
         },
         environment: {
-          radio_climate: 'continental_temperate',
-          polarization: 'vertical',
+          radio_climate: "continental_temperate",
+          polarization: "vertical",
           clutter_height: 1.0,
           ground_dielectric: 15.0,
           ground_conductivity: 0.005,
-          atmosphere_bending: 301.0
+          atmosphere_bending: 301.0,
         },
         simulation: {
           situation_fraction: 95.0,
           time_fraction: 95.0,
           simulation_extent: 30.0,
-          high_resolution: false
+          high_resolution: false,
         },
         display: {
-          color_scale: 'plasma',
+          color_scale: "plasma",
           min_dbm: -130.0,
           max_dbm: -80.0,
           overlay_transparency: 50,
-          overlapMode: 'hatch' as 'hatch' | 'blend'
+          overlapMode: "hatch" as "hatch" | "blend",
         },
-      }
-    }
+      },
+    };
   },
   actions: {
     async loadMatrixConfig(): Promise<void> {
       try {
-        const response = await fetch('/matrix/config');
+        const response = await fetch("/matrix/config");
         if (response.ok) {
           this.matrixConfig = await response.json();
         }
       } catch (err) {
-        console.warn('Error loading matrix config:', err);
+        console.warn("Error loading matrix config:", err);
       }
     },
     async loadTowerPaths(): Promise<void> {
       try {
-        const response = await fetch('/tower-paths');
+        const response = await fetch("/tower-paths");
         if (!response.ok) {
-          console.warn('Failed to load tower paths:', response.statusText);
+          console.warn("Failed to load tower paths:", response.statusText);
           return;
         }
         const data = await response.json();
         this.towerPaths = data.paths ?? [];
         this.renderTowerPaths();
       } catch (err) {
-        console.warn('Error loading tower paths:', err);
+        console.warn("Error loading tower paths:", err);
       }
     },
     renderTowerPaths(): void {
@@ -146,18 +153,14 @@ const useStore = defineStore('store', {
             color,
             weight: 3,
             opacity: 0.8,
-            dashArray: path.has_los ? undefined : '8, 6',
+            dashArray: path.has_los ? undefined : "8, 6",
           },
         );
 
-        const lossText =
-          path.path_loss_db !== null ? `${path.path_loss_db.toFixed(1)} dB` : 'pending';
-        const losText = path.has_los === null ? 'pending' : path.has_los ? 'Yes' : 'No';
-        const distText =
-          path.distance_km !== null ? `${path.distance_km.toFixed(1)} km` : 'pending';
-        polyline.bindPopup(
-          `<b>Path Loss:</b> ${lossText}<br><b>LOS:</b> ${losText}<br><b>Distance:</b> ${distText}`,
-        );
+        const lossText = path.path_loss_db !== null ? `${path.path_loss_db.toFixed(1)} dB` : "pending";
+        const losText = path.has_los === null ? "pending" : path.has_los ? "Yes" : "No";
+        const distText = path.distance_km !== null ? `${path.distance_km.toFixed(1)} km` : "pending";
+        polyline.bindPopup(`<b>Path Loss:</b> ${lossText}<br><b>LOS:</b> ${losText}<br><b>Distance:</b> ${distText}`);
 
         polyline.addTo(this.map);
         this.towerPathLayers.push(polyline);
@@ -175,9 +178,9 @@ const useStore = defineStore('store', {
       }
 
       try {
-        const response = await fetch('/deadzones');
+        const response = await fetch("/deadzones");
         if (!response.ok) {
-          console.warn('Deadzone analysis unavailable:', response.status);
+          console.warn("Deadzone analysis unavailable:", response.status);
           return;
         }
         this.deadzoneAnalysis = await response.json();
@@ -185,7 +188,7 @@ const useStore = defineStore('store', {
           this._renderDeadzoneOverlay();
         }
       } catch (error) {
-        console.error('Failed to fetch deadzone analysis:', error);
+        console.error("Failed to fetch deadzone analysis:", error);
       }
     },
     toggleDeadzones(): void {
@@ -223,7 +226,7 @@ const useStore = defineStore('store', {
           ">${suggestion.priority_rank}</div>`,
           iconSize: [24, 24],
           iconAnchor: [12, 12],
-          className: '',
+          className: "",
         });
 
         const marker = L.marker([suggestion.lat, suggestion.lon], { icon }).addTo(this.map);
@@ -259,84 +262,84 @@ const useStore = defineStore('store', {
     },
     async login(password: string): Promise<boolean> {
       try {
-        const response = await fetch('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const response = await fetch("/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password }),
         });
         if (!response.ok) return false;
         const data = await response.json();
         this.adminToken = data.token;
         this.isAdmin = true;
-        localStorage.setItem('adminToken', this.adminToken);
+        localStorage.setItem("adminToken", this.adminToken);
         return true;
       } catch {
         return false;
       }
     },
     logout() {
-      this.adminToken = '';
+      this.adminToken = "";
       this.isAdmin = false;
-      localStorage.removeItem('adminToken');
+      localStorage.removeItem("adminToken");
     },
     async checkAuth(): Promise<void> {
       if (!this.adminToken) return;
       try {
-        const response = await fetch('/auth/check', {
+        const response = await fetch("/auth/check", {
           headers: { Authorization: `Bearer ${this.adminToken}` },
         });
         if (response.ok) {
           this.isAdmin = true;
         } else {
-          this.adminToken = '';
+          this.adminToken = "";
           this.isAdmin = false;
-          localStorage.removeItem('adminToken');
+          localStorage.removeItem("adminToken");
         }
       } catch {
-        this.adminToken = '';
+        this.adminToken = "";
         this.isAdmin = false;
-        localStorage.removeItem('adminToken');
+        localStorage.removeItem("adminToken");
       }
     },
     async swapSimulationLayer(towerId: string, simId: string): Promise<void> {
       try {
         const resultResponse = await fetch(`/simulations/${simId}/result`);
         if (!resultResponse.ok) {
-          console.warn('Failed to fetch simulation result:', resultResponse.statusText);
+          console.warn("Failed to fetch simulation result:", resultResponse.statusText);
           return;
         }
         const arrayBuffer = await resultResponse.arrayBuffer();
         const geoRaster = await parseGeoraster(arrayBuffer);
         const site = this.localSites.find((s: Site) => s.taskId === towerId);
         if (!site) {
-          console.warn('No site found for tower:', towerId);
+          console.warn("No site found for tower:", towerId);
           return;
         }
         site.raster = geoRaster;
         this.redrawSites();
         this.updateOverlapLayer();
       } catch (err) {
-        console.warn('Error swapping simulation layer:', err);
+        console.warn("Error swapping simulation layer:", err);
       }
     },
     setTxCoords(lat: number, lon: number) {
-      this.splatParams.transmitter.tx_lat = lat
-      this.splatParams.transmitter.tx_lon = lon
+      this.splatParams.transmitter.tx_lat = lat;
+      this.splatParams.transmitter.tx_lon = lon;
     },
     removeSite(index: number) {
       if (!this.map) {
-        return
+        return;
       }
-      this.localSites.splice(index, 1)
+      this.localSites.splice(index, 1);
       this.map.eachLayer((layer: L.Layer) => {
         if (layer instanceof GeoRasterLayer) {
           this.map!.removeLayer(layer);
         }
       });
-      this.redrawSites()
-      this.updateOverlapLayer()
+      this.redrawSites();
+      this.updateOverlapLayer();
       if (this.showDeadzones) {
-        this.fetchDeadzones()
+        this.fetchDeadzones();
       }
     },
     toggleSiteVisibility(index: number) {
@@ -365,7 +368,7 @@ const useStore = defineStore('store', {
       this.localSites.forEach((site: Site) => {
         if (!site.visible) return;
         const rasterLayer = new GeoRasterLayer({
-          georaster: {...site}.raster,
+          georaster: { ...site }.raster,
           opacity: overlapActive ? 0 : 0.7,
           noDataValue: 255,
           resolution: 256,
@@ -384,9 +387,7 @@ const useStore = defineStore('store', {
       }
 
       // Collect all visible sites that have raster data
-      const visibleSites = this.localSites.filter(
-        (s: Site) => s.visible && s.raster
-      );
+      const visibleSites = this.localSites.filter((s: Site) => s.visible && s.raster);
 
       // Only create overlap layer when 2+ visible towers
       if (visibleSites.length < 2) {
@@ -417,7 +418,7 @@ const useStore = defineStore('store', {
       // Ensure individual GeoRasterLayers are hidden (overlap layer handles rendering)
       this.redrawSites();
     },
-    initMap() {     
+    initMap() {
       this.map = L.map("map", {
         // center: [51.102167, -114.098667],
         zoom: 10,
@@ -428,49 +429,62 @@ const useStore = defineStore('store', {
 
       L.control.zoom({ position: "bottomleft" }).addTo(this.map as L.Map);
 
-      const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap contributors © CARTO',
+      const cartoLight = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        attribution: "© OpenStreetMap contributors © CARTO",
       });
 
-      const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-      })
-
-      const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles © Esri — Source: Esri, USGS, NOAA',
+      const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
       });
 
-      const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-        attribution: 'Map data: © OpenStreetMap contributors, SRTM | OpenTopoMap',
+      const satelliteLayer = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution: "Tiles © Esri — Source: Esri, USGS, NOAA",
+        },
+      );
+
+      const topoLayer = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        attribution: "Map data: © OpenStreetMap contributors, SRTM | OpenTopoMap",
       });
 
       streetLayer.addTo(this.map as L.Map);
 
       // Base Layers
       const baseLayers = {
-        "OSM": streetLayer,
+        OSM: streetLayer,
         "Carto Light": cartoLight,
-        "Satellite": satelliteLayer,
-        "Topo Map": topoLayer
+        Satellite: satelliteLayer,
+        "Topo Map": topoLayer,
       };
 
       // EasyPrint control
-      (L as any).easyPrint({
-        title: "Save",
-        position: "bottomleft",
-        sizeModes: ["A4Portrait", "A4Landscape"],
-        filename: "sites",
-        exportOnly: true
-      }).addTo(this.map as L.Map);
+      (L as any)
+        .easyPrint({
+          title: "Save",
+          position: "bottomleft",
+          sizeModes: ["A4Portrait", "A4Landscape"],
+          filename: "sites",
+          exportOnly: true,
+        })
+        .addTo(this.map as L.Map);
 
-      L.control.layers(baseLayers, {}, {
-        position: "bottomleft",
-      }).addTo(this.map as L.Map);
+      L.control
+        .layers(
+          baseLayers,
+          {},
+          {
+            position: "bottomleft",
+          },
+        )
+        .addTo(this.map as L.Map);
 
       this.map.on("baselayerchange", () => {
         this.redrawSites(); // Re-apply the GeoRasterLayer on top
       });
-      this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site");
+      this.currentMarker = L.marker(position, { icon: redPinMarker })
+        .addTo(this.map as L.Map)
+        .bindPopup("Transmitter site");
       this.redrawSites();
       this.loadTowerPaths();
     },
@@ -511,9 +525,9 @@ const useStore = defineStore('store', {
           min_dbm: this.splatParams.display.min_dbm,
           max_dbm: this.splatParams.display.max_dbm,
         };
-    
-        this.simulationState = 'running';
-    
+
+        this.simulationState = "running";
+
         // Send the request to the backend's /predict endpoint
         const predictResponse = await fetch("/predict", {
           method: "POST",
@@ -522,40 +536,34 @@ const useStore = defineStore('store', {
           },
           body: JSON.stringify(payload),
         });
-    
+
         if (!predictResponse.ok) {
-          this.simulationState = 'failed';
+          this.simulationState = "failed";
           const errorDetails = await predictResponse.text();
           throw new Error(`Failed to start prediction: ${errorDetails}`);
         }
-    
+
         const predictData = await predictResponse.json();
         const taskId = predictData.task_id;
-    
+
         // Poll for task status and result
         const pollInterval = 1000; // 1 seconds
         const pollStatus = async () => {
-          const statusResponse = await fetch(
-            `/status/${taskId}`,
-          );
+          const statusResponse = await fetch(`/status/${taskId}`);
           if (!statusResponse.ok) {
             throw new Error("Failed to fetch task status.");
           }
-    
+
           const statusData = await statusResponse.json();
 
           if (statusData.status === "completed") {
-            this.simulationState = 'completed';
+            this.simulationState = "completed";
 
             // Fetch the GeoTIFF data
-            const resultResponse = await fetch(
-              `/result/${taskId}`,
-            );
+            const resultResponse = await fetch(`/result/${taskId}`);
             if (!resultResponse.ok) {
               throw new Error("Failed to fetch simulation result.");
-            }
-            else
-            {
+            } else {
               const arrayBuffer = await resultResponse.arrayBuffer();
               const geoRaster = await parseGeoraster(arrayBuffer);
               const colorIndex = this.localSites.length % TOWER_COLORS.length;
@@ -576,20 +584,19 @@ const useStore = defineStore('store', {
                 this.fetchDeadzones();
               }
             }
-          }
-          else if (statusData.status === "failed") {
-            this.simulationState = 'failed';
+          } else if (statusData.status === "failed") {
+            this.simulationState = "failed";
           } else {
             setTimeout(pollStatus, pollInterval); // Retry after interval
           }
         };
-    
+
         pollStatus(); // Start polling
       } catch (error) {
         console.error("Error:", error);
       }
-    }
-  }
+    },
+  },
 });
 
-export { useStore }
+export { useStore };

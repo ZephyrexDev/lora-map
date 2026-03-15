@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS tower_paths (
     tower_b_id TEXT NOT NULL REFERENCES towers(id) ON DELETE CASCADE,
     path_loss_db REAL,
     has_los INTEGER,  -- 0 or 1
+    distance_km REAL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(tower_a_id, tower_b_id)
 );
