@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Query
+from fastapi import BackgroundTasks, Depends, FastAPI
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -113,9 +113,10 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
         sim_id = row["id"]
         hw_key = row["client_hardware"]
         ant_key = row["client_antenna"]
+        terrain_key = row["terrain_model"]
 
         try:
-            overrides: dict[str, Any] = {}
+            overrides: dict[str, Any] = {"terrain_model": terrain_key}
             hw_params = HARDWARE_RX_PARAMS.get(hw_key, {})
             ant_params = ANTENNA_RX_PARAMS.get(ant_key, {})
 
@@ -318,20 +319,11 @@ async def delete_tower(tower_id: str) -> JSONResponse:
 
 
 @app.get("/towers/{tower_id}/simulations")
-async def list_tower_simulations(
-    tower_id: str,
-    enabled_only: bool = Query(False, description="Filter to only simulations matching enabled matrix config members"),
-) -> JSONResponse:
+async def list_tower_simulations(tower_id: str) -> JSONResponse:
     """Return all simulations for a tower (without GeoTIFF blobs).
-
-    When ``enabled_only=true``, only simulations whose hardware, antenna, and
-    terrain values are all currently enabled in the matrix config are returned.
-    This is intended for visitor-facing views.  The admin view omits the flag
-    to see every simulation regardless.
 
     Args:
         tower_id: The unique identifier for the tower.
-        enabled_only: If true, filter by current matrix config enabled members.
 
     Returns:
         JSONResponse with a list of simulation objects.
@@ -342,19 +334,6 @@ async def list_tower_simulations(
             "FROM simulations WHERE tower_id = ?",
             (tower_id,),
         ).fetchall()
-
-        if enabled_only:
-            config = get_matrix_config(conn)
-            enabled_hw = set(config.get("hardware", []))
-            enabled_ant = set(config.get("antennas", []))
-            enabled_ter = set(config.get("terrain", []))
-            rows = [
-                r
-                for r in rows
-                if r["client_hardware"] in enabled_hw
-                and r["client_antenna"] in enabled_ant
-                and r["terrain_model"] in enabled_ter
-            ]
 
     simulations = [
         {
@@ -417,7 +396,7 @@ _KNOWN_ANTENNAS = {
     "bingfu_whip",
     "slinkdsco_omni",
 }
-_KNOWN_TERRAIN = {"bare_earth", "lulc_clutter"}
+_KNOWN_TERRAIN = {"bare_earth", "dsm", "lulc_clutter"}
 
 
 @app.get("/matrix/config")
@@ -431,19 +410,12 @@ async def get_matrix_config_endpoint() -> JSONResponse:
 @app.put("/matrix/config", dependencies=[Depends(require_admin)])
 async def put_matrix_config_endpoint(
     body: dict[str, Any],
-    background_tasks: BackgroundTasks,
 ) -> JSONResponse:
     """Update the matrix configuration (admin-only).
 
     Accepts a JSON body with keys ``hardware``, ``antennas``, and ``terrain``,
     each mapping to a list of string identifiers.  All values must be from
     the known presets.
-
-    After saving, a delta computation inserts ``pending`` simulation rows for
-    any new combinations that don't already exist for each tower.  Existing
-    rows are never deleted (cached results are retained even when a member is
-    disabled).  Towers with new pending simulations are queued for background
-    processing.
     """
     errors: list[str] = []
     for key, known in [
@@ -472,41 +444,6 @@ async def put_matrix_config_endpoint(
 
     with db_connection() as conn:
         set_matrix_config(conn, config)
-
-        # Delta computation: insert pending rows for new combinations per tower
-        combinations = get_matrix_combinations(config)
-        towers = conn.execute("SELECT id, params FROM towers").fetchall()
-
-    towers_to_run: list[tuple[str, CoveragePredictionRequest]] = []
-
-    for tower in towers:
-        tower_id = tower["id"]
-        with db_connection() as conn:
-            existing = conn.execute(
-                "SELECT client_hardware, client_antenna, terrain_model FROM simulations WHERE tower_id = ?",
-                (tower_id,),
-            ).fetchall()
-            existing_set = {(r["client_hardware"], r["client_antenna"], r["terrain_model"]) for r in existing}
-
-            new_count = 0
-            for combo in combinations:
-                combo_key = (combo["hardware"], combo["antenna"], combo["terrain"])
-                if combo_key not in existing_set:
-                    sim_id = str(uuid4())
-                    conn.execute(
-                        "INSERT INTO simulations (id, tower_id, client_hardware, client_antenna, terrain_model) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (sim_id, tower_id, combo["hardware"], combo["antenna"], combo["terrain"]),
-                    )
-                    new_count += 1
-
-            if new_count > 0:
-                conn.commit()
-                tower_params = CoveragePredictionRequest(**json.loads(tower["params"]))
-                towers_to_run.append((tower_id, tower_params))
-
-    for tower_id, tower_params in towers_to_run:
-        background_tasks.add_task(run_matrix_simulations, tower_id, tower_params)
 
     return JSONResponse(config)
 

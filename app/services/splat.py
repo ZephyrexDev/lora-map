@@ -15,13 +15,13 @@ import numpy as np
 import rasterio
 from botocore import UNSIGNED
 from botocore.config import Config
-from botocore.exceptions import ClientError
 from diskcache import Cache
 from PIL import Image
 from rasterio.enums import Resampling
 from rasterio.transform import Affine, from_bounds
 
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
+from app.services.terrain import DsmProvider, LulcClutterProvider, SrtmProvider, TerrainProvider
 
 logger = logging.getLogger(__name__)
 logging.getLogger("boto3").setLevel(logging.WARNING)
@@ -108,6 +108,14 @@ class Splat:
         self.bucket_name = bucket_name
         self.bucket_prefix = bucket_prefix
 
+        # Terrain providers
+        srtm_provider = SrtmProvider(self.s3, self.tile_cache)
+        self.terrain_providers: dict[str, TerrainProvider] = {
+            "bare_earth": srtm_provider,
+            "dsm": DsmProvider(self.s3, self.tile_cache, srtm_fallback=srtm_provider),
+            "lulc_clutter": LulcClutterProvider(self.s3, self.tile_cache, srtm_provider=srtm_provider),
+        }
+
         logger.info(
             f"Initialized SPLAT! with terrain tile cache at '{cache_dir}' with a size limit of {cache_size_gb} GB."
         )
@@ -142,9 +150,12 @@ class Splat:
                 # determine the required terrain tiles
                 required_tiles = Splat._calculate_required_terrain_tiles(request.lat, request.lon, request.radius)
 
+                # Select terrain provider based on request
+                provider = self.terrain_providers.get(request.terrain_model, self.terrain_providers["bare_earth"])
+
                 # download and convert terrain tiles to SPLAT! sdf
                 for tile_name, sdf_name, sdf_hd_name in required_tiles:
-                    tile_data = self._download_terrain_tile(tile_name)
+                    tile_data = provider.get_tile(tile_name)
                     sdf_data = self._convert_hgt_to_sdf(tile_data, tile_name, high_resolution=request.high_resolution)
 
                     with open(
@@ -678,60 +689,6 @@ class Splat:
         except Exception as e:
             logger.error(f"Error during GeoTIFF generation: {e}")
             raise RuntimeError(f"Error during GeoTIFF generation: {e}") from e
-
-    def _fetch_tile_from_s3(self, s3_key: str, cache_key: str) -> bytes | None:
-        """Try to fetch a tile from S3, cache it on success, return None on failure."""
-        try:
-            obj = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
-            tile_data = obj["Body"].read()
-            self.tile_cache[cache_key] = tile_data
-            return tile_data
-        except ClientError as e:
-            if e.response["Error"]["Code"] == "NoSuchKey":
-                return None
-            raise
-
-    def _download_terrain_tile(self, tile_name: str) -> bytes:
-        """
-        Downloads a terrain tile from the S3 bucket if not found in the local cache.
-
-        This method checks if the requested tile is available in the cache..
-        If the tile is not cached, it downloads the tile from the specified S3 bucket,
-        stores it in the cache, and returns the tile data.
-
-        Args:
-            tile_name (str): The name of the terrain tile to be downloaded.
-
-        Returns:
-            bytes: The binary content of the terrain tile.
-
-        Raises:
-            Exception: If the tile cannot be downloaded from S3.
-        """
-        if tile_name in self.tile_cache:
-            logger.info(f"Cache hit: {tile_name} found in the local cache.")
-            return self.tile_cache[tile_name]
-
-        # Download the tile from S3 if not in cache
-        tile_dir_prefix = tile_name[:3]
-        s3_key_v3 = f"{self.bucket_prefix}/{tile_dir_prefix}/{tile_name}"
-        logger.info(f"Downloading {tile_name} from {self.bucket_name}/{s3_key_v3}...")
-        try:
-            tile_data = self._fetch_tile_from_s3(s3_key_v3, tile_name)
-            if tile_data is not None:
-                return tile_data
-
-            # V3 key not found — fall back to V1 SRTM data
-            s3_key_v1 = f"skadi/{tile_dir_prefix}/{tile_name}"
-            logger.info(f"Tile {tile_name} not found at {s3_key_v3}, trying V1 at {s3_key_v1}...")
-            tile_data = self._fetch_tile_from_s3(s3_key_v1, tile_name)
-            if tile_data is not None:
-                return tile_data
-
-            raise FileNotFoundError(f"Tile {tile_name} not found in S3 bucket at either {s3_key_v3} or {s3_key_v1}")
-        except Exception as e:
-            logger.error(f"Failed to download {tile_name} from S3: {e}")
-            raise
 
     @staticmethod
     def _hgt_filename_to_sdf_filename(hgt_filename: str, high_resolution: bool = False) -> str:

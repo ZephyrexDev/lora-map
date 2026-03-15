@@ -24,8 +24,7 @@ class TestPredictCreatesSimulations:
 
         with db_connection() as conn:
             rows = conn.execute(
-                "SELECT client_hardware, client_antenna, terrain_model, status "
-                "FROM simulations WHERE tower_id = ?",
+                "SELECT client_hardware, client_antenna, terrain_model, status " "FROM simulations WHERE tower_id = ?",
                 (tower_id,),
             ).fetchall()
 
@@ -45,8 +44,7 @@ class TestPredictCreatesSimulations:
 
         with db_connection() as conn:
             rows = conn.execute(
-                "SELECT client_hardware, client_antenna, terrain_model "
-                "FROM simulations WHERE tower_id = ?",
+                "SELECT client_hardware, client_antenna, terrain_model " "FROM simulations WHERE tower_id = ?",
                 (tower_id,),
             ).fetchall()
 
