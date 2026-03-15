@@ -85,9 +85,13 @@ podman-compose up         # Dev convenience (optional)
 - **Favor object-oriented design.** Group related state and behavior into classes. Use inheritance and composition to share logic — prefer composition when the relationship is "has-a", inheritance when "is-a". Avoid loose collections of module-level functions when a class would reduce parameter passing and improve cohesion.
 - **Minimize code volume.** Consolidate duplicate logic into shared base classes, mixins, or utility methods. If two pieces of code do similar things, refactor them behind a common abstraction. Shorter is better when clarity is preserved.
 - Avoid mutable default arguments. Prefer `None` with internal initialization.
-- Use `logging` (module-level `logger = logging.getLogger(__name__)`) — never `print()` in backend code.
-- Handle exceptions at the appropriate level. Don't catch broad `Exception` unless re-raising or storing the error (as in the task runner pattern).
+- Use `logging` (module-level `logger = logging.getLogger(__name__)`) — never `print()` in backend code. Use lazy `%s` formatting (`logger.info("msg %s", val)`) — never f-strings in logger calls (they evaluate eagerly even when the level is disabled).
+- Handle exceptions at the appropriate level. Don't catch broad `Exception` unless re-raising or storing the error (as in the task runner pattern). Never leak internal exception messages to API callers — return generic messages and log the details server-side.
 - Prefer `pathlib.Path` over `os.path` for file operations.
+- Never interpolate table or column names into SQL. Use parameterized queries for values; validate identifiers against an allowlist if dynamic SQL is unavoidable.
+- Use `hmac.compare_digest` for any security-sensitive string comparison (tokens, passwords). Never use `==` or `!=` for secrets.
+- Avoid module-level side effects that depend on environment variables or external state. Prefer lazy initialization (e.g., in FastAPI lifespan) so the app can start and report useful errors.
+- Always pass `timeout=` to `subprocess.run` calls. No subprocess should be able to hang indefinitely.
 
 ### TypeScript / Vue
 
@@ -113,8 +117,10 @@ podman-compose up         # Dev convenience (optional)
 - **DRY aggressively.** Extract repeated logic into shared abstractions as soon as a pattern appears twice. Prefer a single parameterized implementation over two similar blocks. Actively look for opportunities to reduce total lines of code through consolidation.
 - **No dead code.** Remove commented-out imports, unused variables, and stale comments. Don't leave `// TODO` markers without a linked issue.
 - **Naming:** Names should describe *what* something is or does, not *how*. Prefer `terrain_tile_cache` over `dc` or `cache1`.
-- **No secrets in code.** AWS credentials, API keys, and admin credentials must come from environment variables — never hardcoded.
+- **No secrets in code.** AWS credentials, API keys, and admin credentials must come from environment variables — never hardcoded. Auth tokens returned to clients must be opaque (random); never echo raw passwords or secrets back.
 - **Commits:** Write concise commit messages focused on *why*, not *what*. One logical change per commit.
+- **Schema changes require migrations.** Never rely on `CREATE TABLE IF NOT EXISTS` alone. Add a new versioned entry in `app/db/schema.py:MIGRATIONS` so existing databases get updated. The `schema_version` table tracks what's been applied.
+- **Don't suppress linter warnings** (`# noqa`, `// eslint-disable`) without first trying to fix the root cause. Suppression is a last resort, not a shortcut.
 - **No HTTPS in app.** The app serves HTTP only on port 8080. TLS termination is handled by the external reverse proxy. Do not add SSL config, certificate handling, or HTTPS redirects.
 - **No CORS.** The reverse proxy serves both the API and static frontend on the same origin. Do not add CORS middleware.
 
