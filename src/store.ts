@@ -12,21 +12,10 @@ import {
   type DeadzoneAnalysis,
   type TowerInfo,
 } from "./types.ts";
-import { cloneObject } from "./utils.ts";
+import { cloneObject, pathLossColor } from "./utils.ts";
 import { redPinMarker } from "./layers.ts";
 import { createOverlapHatchLayer } from "./layers/OverlapHatchLayer.ts";
 import { DeadzoneCanvasLayer } from "./deadzoneLayer.ts";
-
-/**
- * Map path loss (dB) and LOS status to a color for polyline rendering.
- * Green = good (low loss, LOS), yellow = marginal, red = poor (high loss or NLOS).
- */
-function pathLossColor(pathLossDb: number, hasLos: boolean | null): string {
-  if (hasLos === false) return "#e74c3c"; // red for NLOS
-  if (pathLossDb < 100) return "#2ecc71"; // green – good
-  if (pathLossDb <= 130) return "#f1c40f"; // yellow – marginal
-  return "#e74c3c"; // red – poor
-}
 
 // Default tower colors for visual differentiation
 const TOWER_COLORS = [
@@ -554,8 +543,7 @@ const useStore = defineStore("store", {
       };
 
       // EasyPrint control
-      (L as any)
-        .easyPrint({
+      L.easyPrint({
           title: "Save",
           position: "bottomleft",
           sizeModes: ["A4Portrait", "A4Landscape"],

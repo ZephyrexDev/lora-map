@@ -1,3 +1,22 @@
+/**
+ * Minimal type for parsed georaster objects from the `georaster` library,
+ * which does not ship its own TypeScript definitions.
+ */
+export interface GeoRaster {
+  readonly xmin: number;
+  readonly xmax: number;
+  readonly ymin: number;
+  readonly ymax: number;
+  readonly pixelWidth: number;
+  readonly pixelHeight: number;
+  readonly values: number[][][];
+  readonly noDataValue?: number;
+  readonly width: number;
+  readonly height: number;
+  readonly numberOfRasters: number;
+  readonly projection: number;
+}
+
 export interface MatrixConfig {
   hardware: Record<string, boolean>;
   antennas: Record<string, boolean>;
@@ -54,7 +73,7 @@ export interface DeadzoneAnalysis {
 }
 
 export interface TowerInfo {
-  raster: any;
+  raster: GeoRaster;
   color: string;
   index: number;
 }
@@ -68,7 +87,7 @@ export interface SimProgress {
 export interface Site {
   params: SplatParams;
   taskId: string;
-  raster: any;
+  raster: GeoRaster;
   color: string;
   visible: boolean;
 }
@@ -81,6 +100,8 @@ export interface SplatParams {
     tx_freq: number;
     tx_height: number;
     tx_gain: number;
+    tx_swr?: number;
+    tx_color?: string;
   };
   receiver: {
     rx_sensitivity: number;

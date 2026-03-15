@@ -1,3 +1,14 @@
+/**
+ * Map path loss (dB) and LOS status to a color for polyline rendering.
+ * Green = good (low loss, LOS), yellow = marginal, red = poor (high loss or NLOS).
+ */
+export function pathLossColor(pathLossDb: number, hasLos: boolean | null): string {
+  if (hasLos === false) return "#e74c3c"; // red for NLOS
+  if (pathLossDb < 100) return "#2ecc71"; // green – good
+  if (pathLossDb <= 130) return "#f1c40f"; // yellow – marginal
+  return "#e74c3c"; // red – poor
+}
+
 export function cloneObject<T>(item: T): T {
   return JSON.parse(JSON.stringify(item));
 }

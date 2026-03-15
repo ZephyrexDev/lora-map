@@ -1,6 +1,6 @@
 import L from "leaflet";
 import { hexToRgb } from "../utils.ts";
-import { type TowerInfo } from "../types.ts";
+import { type TowerInfo, type GeoRaster } from "../types.ts";
 
 // Pre-defined stripe angles in radians for each tower index
 const STRIPE_ANGLES = [
@@ -31,7 +31,7 @@ interface OverlapHatchLayerOptions extends L.GridLayerOptions {
  * Sample a georaster at a given lat/lng.
  * Returns the pixel value (dBm) or null if out of bounds or nodata.
  */
-function sampleRaster(raster: any, lat: number, lng: number): number | null {
+function sampleRaster(raster: GeoRaster, lat: number, lng: number): number | null {
   const { xmin, xmax, ymin, ymax, pixelWidth, pixelHeight, values, noDataValue } = raster;
 
   if (lng < xmin || lng > xmax || lat < ymin || lat > ymax) {
@@ -270,7 +270,8 @@ const OverlapHatchLayer = L.GridLayer.extend({
 });
 
 export function createOverlapHatchLayer(options: OverlapHatchLayerOptions): L.GridLayer {
-  return new (OverlapHatchLayer as any)(options);
+  return new (OverlapHatchLayer as unknown as new (o: OverlapHatchLayerOptions) => L.GridLayer)(options);
 }
 
+export { sampleRaster, signalToAlpha };
 export type { OverlapHatchLayerOptions };

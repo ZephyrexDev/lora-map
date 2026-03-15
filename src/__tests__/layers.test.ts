@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
+import L from "leaflet";
 import { redPinMarker, chirpyMarker } from "../layers";
 
 describe("redPinMarker", () => {
@@ -12,7 +13,7 @@ describe("redPinMarker", () => {
   });
 
   it("contains pin emoji in HTML", () => {
-    const html = (redPinMarker.options as any).html as string;
+    const html = (redPinMarker.options as L.DivIconOptions).html as string;
     expect(html).toContain("📍");
   });
 });
@@ -27,7 +28,7 @@ describe("chirpyMarker", () => {
   });
 
   it("contains SVG in HTML", () => {
-    const html = (chirpyMarker.options as any).html as string;
+    const html = (chirpyMarker.options as L.DivIconOptions).html as string;
     expect(html).toContain("<svg");
     expect(html).toContain("</svg>");
   });

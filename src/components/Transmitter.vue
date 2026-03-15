@@ -308,7 +308,7 @@ let popover = new bootstrap.Popover(document.createElement("input"), {
 
 const setWithMap = () => {
   popover.show();
-  store.map!.once("click", function (e: any) {
+  store.map!.once("click", function (e: L.LeafletMouseEvent) {
     const { lat } = e.latlng;
     let { lng } = e.latlng; // Get clicked location coordinates
     lng = ((((lng + 180) % 360) + 360) % 360) - 180;
