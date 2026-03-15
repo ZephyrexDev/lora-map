@@ -211,6 +211,10 @@ class LulcClutterProvider(TerrainProvider):
 
         n_values = len(raw) // 2
         side = int(n_values**0.5)
+        if side * side != n_values:
+            raise ValueError(
+                f"Invalid HGT tile size: {n_values} values is not a perfect square ({side}² = {side * side})"
+            )
         elevation = np.frombuffer(raw, dtype=">i2").reshape(side, side).astype(np.float32)
 
         # Fetch WorldCover tile and compute clutter heights

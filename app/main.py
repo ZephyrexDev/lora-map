@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -90,6 +91,13 @@ async def lifespan(application: FastAPI):
 
     splat_service = Splat(splat_path=os.environ.get("SPLAT_PATH", "/app/splat"))
     logger.info("SPLAT! service initialized.")
+
+    if os.environ.get("ADMIN_PASSWORD") is None:
+        logger.warning(
+            "ADMIN_PASSWORD is not set — admin authentication is DISABLED. "
+            "Set ADMIN_PASSWORD to secure admin endpoints in production."
+        )
+
     yield
 
 
@@ -281,7 +289,8 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
 
         with db_connection() as conn:
             conn.execute(
-                "UPDATE tower_paths SET path_loss_db = ?, has_los = ?, distance_km = ? WHERE id = ?",
+                "UPDATE tower_paths SET path_loss_db = ?, has_los = ?, distance_km = ?, status = 'completed' "
+                "WHERE id = ?",
                 (result.path_loss_db, int(result.has_los), result.distance_km, path_id),
             )
             conn.commit()
@@ -296,7 +305,10 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
     except Exception as e:
         logger.error("Tower path %s failed: %s", path_id, e)
         with db_connection() as conn:
-            conn.execute("DELETE FROM tower_paths WHERE id = ?", (path_id,))
+            conn.execute(
+                "UPDATE tower_paths SET status = 'failed', error = ? WHERE id = ?",
+                (str(e), path_id),
+            )
             conn.commit()
 
 
@@ -689,26 +701,35 @@ class _DeadzoneCache:
     """In-memory cache for deadzone analysis results.
 
     Uses a content hash of the GeoTIFF blobs to detect actual data changes,
-    not just tower count.
+    not just tower count.  All access is protected by a threading lock to
+    prevent races between concurrent ``/deadzones`` requests.
     """
 
     _content_hash: str = ""
     result: DeadzoneAnalysisResponse | None = None
+    _lock: threading.Lock = dataclasses.field(default_factory=threading.Lock)
 
     def invalidate(self) -> None:
-        self._content_hash = ""
-        self.result = None
+        with self._lock:
+            self._content_hash = ""
+            self.result = None
 
     def is_valid_for(self, blobs: list[bytes]) -> bool:
         """Return True if the cache matches the current blob set."""
-        if self.result is None:
-            return False
-        blob_hash = hashlib.sha256(b"".join(sorted(hashlib.sha256(b).digest() for b in blobs))).hexdigest()
-        return blob_hash == self._content_hash
+        with self._lock:
+            if self.result is None:
+                return False
+            blob_hash = self._compute_hash(blobs)
+            return blob_hash == self._content_hash
 
     def store(self, blobs: list[bytes], result: DeadzoneAnalysisResponse) -> None:
-        self._content_hash = hashlib.sha256(b"".join(sorted(hashlib.sha256(b).digest() for b in blobs))).hexdigest()
-        self.result = result
+        with self._lock:
+            self._content_hash = self._compute_hash(blobs)
+            self.result = result
+
+    @staticmethod
+    def _compute_hash(blobs: list[bytes]) -> str:
+        return hashlib.sha256(b"".join(sorted(hashlib.sha256(b).digest() for b in blobs))).hexdigest()
 
 
 _deadzone_cache = _DeadzoneCache()

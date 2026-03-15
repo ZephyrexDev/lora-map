@@ -62,15 +62,21 @@ _WINDOW_SECONDS = 60
 _MAX_TRACKED_IPS = 10_000
 
 
+_PRUNE_INTERVAL_SECONDS = 300  # Run full sweep at most every 5 minutes
+_last_prune: float = 0.0
+
+
 def _check_rate_limit(client_ip: str) -> None:
     """Raise 429 if client_ip has exceeded _MAX_ATTEMPTS in the last _WINDOW_SECONDS."""
+    global _last_prune
     now = time.monotonic()
     with _rate_lock:
-        # Periodic sweep: if the dict has grown too large, prune all stale entries
-        if len(_login_attempts) > _MAX_TRACKED_IPS:
+        # Periodic sweep: prune stale entries every _PRUNE_INTERVAL_SECONDS or when dict is large
+        if now - _last_prune > _PRUNE_INTERVAL_SECONDS or len(_login_attempts) > _MAX_TRACKED_IPS:
             stale = [ip for ip, ts in _login_attempts.items() if all(now - t >= _WINDOW_SECONDS for t in ts)]
             for ip in stale:
                 del _login_attempts[ip]
+            _last_prune = now
 
         attempts = _login_attempts.get(client_ip, [])
         attempts = [t for t in attempts if now - t < _WINDOW_SECONDS]

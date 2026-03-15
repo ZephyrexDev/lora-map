@@ -622,6 +622,9 @@ class Splat:
             namespace = {"kml": "http://earth.google.com/kml/2.1"}
             box = tree.find(".//kml:LatLonBox", namespace)
 
+            if box is None:
+                raise RuntimeError("LatLonBox not found in SPLAT! KML output — cannot determine geospatial bounds")
+
             north = float(box.find("kml:north", namespace).text)
             south = float(box.find("kml:south", namespace).text)
             east = float(box.find("kml:east", namespace).text)

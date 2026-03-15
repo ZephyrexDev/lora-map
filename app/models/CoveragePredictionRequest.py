@@ -1,9 +1,17 @@
+import functools
 from typing import Literal
 
 import matplotlib.pyplot as plt
 from pydantic import BaseModel, Field
 
-AVAILABLE_COLORMAPS = plt.colormaps()
+
+@functools.cache
+def _get_available_colormaps() -> tuple[str, ...]:
+    """Lazily load matplotlib colormaps to avoid import-time side effects."""
+    return tuple(plt.colormaps())
+
+
+AVAILABLE_COLORMAPS = _get_available_colormaps()
 
 
 class CoveragePredictionRequest(BaseModel):

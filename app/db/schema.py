@@ -87,6 +87,17 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
             SCHEMA_SIMULATIONS,
         ],
     ),
+    (
+        2,
+        [
+            "CREATE INDEX IF NOT EXISTS idx_tasks_tower_id ON tasks(tower_id);",
+            "CREATE INDEX IF NOT EXISTS idx_simulations_tower_id ON simulations(tower_id);",
+            "CREATE INDEX IF NOT EXISTS idx_tower_paths_tower_a ON tower_paths(tower_a_id);",
+            "CREATE INDEX IF NOT EXISTS idx_tower_paths_tower_b ON tower_paths(tower_b_id);",
+            "ALTER TABLE tower_paths ADD COLUMN status TEXT NOT NULL DEFAULT 'pending';",
+            "ALTER TABLE tower_paths ADD COLUMN error TEXT;",
+        ],
+    ),
 ]
 
 

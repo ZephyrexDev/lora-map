@@ -32,6 +32,16 @@ _MIN_REGION_PIXELS = 25
 # Maximum number of site suggestions to return
 _MAX_SUGGESTIONS = 5
 
+# Priority scoring weights: area vs. proximity to existing coverage edges
+_PRIORITY_WEIGHT_AREA = 0.6
+_PRIORITY_WEIGHT_PROXIMITY = 0.4
+
+# Edge fraction scaling factor (raw edge fractions are small, so scale up)
+_EDGE_FRACTION_SCALE = 5.0
+
+# Conservative estimate: fraction of deadzone area a new tower would cover
+_ESTIMATED_COVERAGE_FRACTION = 0.7
+
 
 class DeadzoneAnalyzer:
     """Analyzes gaps in combined tower coverage and identifies remediation sites."""
@@ -280,8 +290,8 @@ class DeadzoneAnalyzer:
                 edge_fraction = edge_fractions[region.region_id]
 
                 area_score = min(region.area_km2 / max_area, 1.0)
-                proximity_score = min(edge_fraction * 5.0, 1.0)  # scale up since edge fractions are small
-                priority = 0.6 * area_score + 0.4 * proximity_score
+                proximity_score = min(edge_fraction * _EDGE_FRACTION_SCALE, 1.0)
+                priority = _PRIORITY_WEIGHT_AREA * area_score + _PRIORITY_WEIGHT_PROXIMITY * proximity_score
                 region.priority_score = round(min(max(priority, 0.0), 1.0), 4)
 
         # Sort by priority descending
@@ -297,7 +307,7 @@ class DeadzoneAnalyzer:
             suggestion = SiteSuggestionResponse(
                 lat=region.center_lat,
                 lon=region.center_lon,
-                estimated_coverage_km2=round(region.area_km2 * 0.7, 2),  # conservative estimate
+                estimated_coverage_km2=round(region.area_km2 * _ESTIMATED_COVERAGE_FRACTION, 2),
                 priority_rank=rank,
                 reason=(
                     f"Deadzone of {region.area_km2:.1f} km2 adjacent to existing coverage"
