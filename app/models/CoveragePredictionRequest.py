@@ -92,10 +92,10 @@ class CoveragePredictionRequest(BaseModel):
         "instead of the default 3-arcsecond / 90 meter (default: False).",
     )
 
-    terrain_model: Literal["bare_earth", "dsm", "lulc_clutter"] = Field(
+    terrain_model: Literal["bare_earth", "dsm", "lulc_clutter", "weighted_aggregate"] = Field(
         "bare_earth",
         description="Terrain model: bare_earth (SRTM DTM), dsm (Digital Surface Model), "
-        "or lulc_clutter (SRTM + land cover clutter heights)",
+        "lulc_clutter (SRTM + land cover clutter heights), or weighted_aggregate (blend of all three)",
     )
 
     # Tower display

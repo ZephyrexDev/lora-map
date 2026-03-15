@@ -432,6 +432,57 @@ async def get_simulation_result(sim_id: str) -> JSONResponse | StreamingResponse
     return JSONResponse({"sim_id": sim_id, "status": row["status"]})
 
 
+@app.get("/simulations/{tower_id}/aggregate", response_model=None)
+async def get_aggregate_simulation(
+    tower_id: str,
+    client_hardware: str = Query(..., description="Client hardware key"),
+    client_antenna: str = Query(..., description="Client antenna key"),
+) -> JSONResponse | StreamingResponse:
+    """Return a weighted-aggregate GeoTIFF blending bare_earth, DSM, and LULC results.
+
+    Requires all three base terrain simulations to be completed for the given
+    tower + client hardware + client antenna combination.
+    """
+    base_models = ("bare_earth", "dsm", "lulc_clutter")
+    blobs: dict[str, bytes] = {}
+    missing: list[str] = []
+
+    with db_connection() as conn:
+        for terrain in base_models:
+            row = conn.execute(
+                "SELECT status, geotiff FROM simulations "
+                "WHERE tower_id = ? AND client_hardware = ? AND client_antenna = ? AND terrain_model = ?",
+                (tower_id, client_hardware, client_antenna, terrain),
+            ).fetchone()
+
+            if row is None:
+                missing.append(f"{terrain} (not found)")
+            elif row["status"] != "completed":
+                missing.append(f"{terrain} (status: {row['status']})")
+            elif row["geotiff"] is None:
+                missing.append(f"{terrain} (no GeoTIFF data)")
+            else:
+                blobs[terrain] = row["geotiff"]
+
+    if missing:
+        return JSONResponse(
+            {"error": "Cannot compute weighted aggregate — missing base simulations", "missing": missing},
+            status_code=404,
+        )
+
+    try:
+        aggregate_tiff = compute_weighted_aggregate(blobs["bare_earth"], blobs["dsm"], blobs["lulc_clutter"])
+    except Exception as e:
+        logger.error("Weighted aggregate computation failed for tower %s: %s", tower_id, e)
+        return JSONResponse({"error": f"Aggregate computation failed: {e!s}"}, status_code=500)
+
+    return StreamingResponse(
+        io.BytesIO(aggregate_tiff),
+        media_type="image/tiff",
+        headers={"Content-Disposition": f"attachment; filename={tower_id}_aggregate.tif"},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Matrix config endpoints
 # ---------------------------------------------------------------------------

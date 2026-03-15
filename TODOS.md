@@ -200,17 +200,17 @@ Support three terrain elevation sources that feed into SPLAT! via the existing t
 ### Weighted Aggregate mode
 A fourth virtual terrain model that blends the three real models into a single composite prediction. No additional SPLAT! run — it's a weighted pixel-level blend of the three existing simulation results.
 
-- [ ] For each pixel, compute: `signal_dBm = 0.20 × bare_earth + 0.40 × DSM + 0.40 × LULC_clutter`
-- [ ] Requires all three base terrain simulations to be completed for the tower+client combination; skip pixels where any source has no data
-- [ ] Generate the aggregate as a derived GeoTIFF (or compute on-the-fly in the frontend `pixelValuesToColorFn` if all three rasters are loaded)
-- [ ] Rationale: bare-earth is optimistic (no obstructions), DSM and LULC each capture different real-world blockage — weighting them equally at 40% each gives a practical "expected real-world" estimate while the 20% bare-earth component prevents over-pessimism in areas where DSM/LULC data is noisy
+- [x] For each pixel, compute: `signal_dBm = 0.20 × bare_earth + 0.40 × DSM + 0.40 × LULC_clutter`
+- [x] Requires all three base terrain simulations to be completed for the tower+client combination; skip pixels where any source has no data
+- [x] Generate the aggregate as a derived GeoTIFF (or compute on-the-fly in the frontend `pixelValuesToColorFn` if all three rasters are loaded)
+- [x] Rationale: bare-earth is optimistic (no obstructions), DSM and LULC each capture different real-world blockage — weighting them equally at 40% each gives a practical "expected real-world" estimate while the 20% bare-earth component prevents over-pessimism in areas where DSM/LULC data is noisy
 - [ ] Add `"weighted_aggregate"` as a terrain model option in the visitor UI selector (only available when all three base models are cached)
 
 ### Terrain model selection
 - [ ] Add `terrain_model` field to `CoveragePredictionRequest`: `"bare_earth"` (default), `"dsm"`, `"lulc_clutter"`
 - [ ] Route tile download/preprocessing through the selected model in `coverage_prediction()`
 - [ ] Store terrain model used alongside each simulation result in SQLite
-- [ ] `"weighted_aggregate"` is computed from cached results, not a separate SPLAT! run
+- [x] `"weighted_aggregate"` is computed from cached results, not a separate SPLAT! run
 
 ## 14. Meshcore tower path simulation
 

@@ -68,7 +68,8 @@ def get_matrix_combinations(config: dict[str, list[str]]) -> list[dict[str, str]
     """
     hardware = config.get("hardware", [])
     antennas = config.get("antennas", [])
-    terrain = config.get("terrain", [])
+    # weighted_aggregate is derived from the three base models, not a real simulation
+    terrain = [t for t in config.get("terrain", []) if t != "weighted_aggregate"]
 
     if not hardware or not antennas or not terrain:
         return []
