@@ -1,7 +1,7 @@
 <template>
   <form novalidate>
     <div class="row g-2">
-      <div class="col-8">
+      <div class="col-12 col-sm-8">
         <label for="name" class="form-label">Site name</label>
         <input
           id="name"
@@ -12,7 +12,7 @@
           title="Site Name"
         />
       </div>
-      <div class="col-4">
+      <div class="col-12 col-sm-4">
         <label for="tx_color" class="form-label">Tower Color</label>
         <div class="d-flex align-items-center gap-1">
           <input
@@ -22,7 +22,7 @@
             class="form-control form-control-sm form-control-color"
             :disabled="transmitter.tx_color === ''"
             title="Tower overlay color"
-            style="width: 38px; height: 31px"
+            style="min-width: 38px"
           />
           <div class="form-check form-check-inline mb-0">
             <input
@@ -38,7 +38,7 @@
       </div>
     </div>
     <div class="row g-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="tx_lat" class="form-label">Latitude (degrees)</label>
         <input
           id="tx_lat"
@@ -54,7 +54,7 @@
         />
         <div class="invalid-feedback">Please enter a valid latitude (-90 to 90).</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="tx_lon" class="form-label">Longitude (degrees)</label>
         <input
           id="tx_lon"
@@ -74,7 +74,7 @@
 
     <!-- Preset selectors -->
     <div class="row g-2 mt-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="hardwarePreset" class="form-label">Hardware</label>
         <select
           id="hardwarePreset"
@@ -88,7 +88,7 @@
           </option>
         </select>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="regionPreset" class="form-label">Country / Region</label>
         <select id="regionPreset" v-model="selectedRegion" class="form-select form-select-sm" @change="onRegionChange">
           <option :value="-1">Custom</option>
@@ -99,7 +99,7 @@
       </div>
     </div>
     <div class="row g-2 mt-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="antennaPreset" class="form-label">Antenna</label>
         <div class="d-flex align-items-center gap-1">
           <select
@@ -116,13 +116,13 @@
           <span
             v-if="mismatchLossBadge !== null"
             class="badge bg-warning text-dark"
-            style="white-space: nowrap; font-size: 0.7rem"
+            style="white-space: nowrap; font-size: max(0.75rem, 12px)"
           >
             (-{{ mismatchLossBadge }} dB)
           </span>
         </div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="heightPreset" class="form-label">Height Preset</label>
         <select id="heightPreset" v-model="selectedHeight" class="form-select form-select-sm" @change="onHeightChange">
           <option :value="-1">Custom</option>
@@ -133,7 +133,7 @@
 
     <!-- Manual fields -->
     <div class="row g-2 mt-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="tx_power" class="form-label">Power (W)</label>
         <input
           id="tx_power"
@@ -149,7 +149,7 @@
         />
         <div class="invalid-feedback">Power must be a positive number.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="frequency" class="form-label">Frequency (MHz)</label>
         <input
           id="tx_freq"
@@ -168,7 +168,7 @@
       </div>
     </div>
     <div class="row g-2 mt-2">
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="tx_height" class="form-label">Height AGL (m)</label>
         <input
           id="tx_height"
@@ -184,7 +184,7 @@
         />
         <div class="invalid-feedback">Height must be a positive number.</div>
       </div>
-      <div class="col-6">
+      <div class="col-12 col-sm-6">
         <label for="tx_gain" class="form-label">Antenna Gain (dB)</label>
         <input
           id="tx_gain"
@@ -225,7 +225,7 @@
 import L from "leaflet";
 import * as bootstrap from "bootstrap";
 import { useStore } from "../store.ts";
-import { onMounted, ref, computed } from "vue";
+import { onMounted, onUnmounted, ref, computed } from "vue";
 import { redPinMarker } from "../layers.ts";
 import { HARDWARE_PRESETS } from "../presets/hardware.ts";
 import { FREQUENCY_PRESETS } from "../presets/frequencies.ts";
@@ -324,10 +324,28 @@ const setWithMap = () => {
     popover.hide(); // Hide the popover
   });
 };
+function onPrefillTransmitter(e: Event) {
+  const { lat, lon } = (e as CustomEvent).detail;
+  transmitter.tx_lat = lat;
+  transmitter.tx_lon = lon;
+
+  // Place a marker at the pre-filled location
+  if (store.currentMarker) {
+    store.map!.removeLayer(store.currentMarker as L.Marker);
+  }
+  store.currentMarker = L.marker([lat, lon], { icon: redPinMarker }).addTo(store.map as L.Map);
+  store.map!.setView([lat, lon], store.map!.getZoom());
+}
+
 onMounted(() => {
   popover = new bootstrap.Popover(document.getElementById("setWithMap") as Element, {
     trigger: "manual",
   });
-  store.initMap(); // Initialize the map
+  store.initMap();
+  window.addEventListener("prefill-transmitter", onPrefillTransmitter);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("prefill-transmitter", onPrefillTransmitter);
 });
 </script>

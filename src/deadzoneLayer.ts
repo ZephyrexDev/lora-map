@@ -6,8 +6,10 @@
 import L from "leaflet";
 import { type DeadzoneRegion } from "./types.ts";
 
-const DOT_RADIUS = 2;
-const DOT_SPACING = 10;
+const MIN_DOT_RADIUS = 1.5;
+const MAX_DOT_RADIUS = 3.5;
+const MIN_DOT_SPACING = 7;
+const MAX_DOT_SPACING = 14;
 const MIN_OPACITY = 0.3;
 const MAX_OPACITY = 0.8;
 
@@ -92,25 +94,29 @@ class DeadzoneCanvasLayer extends L.Layer {
   private _drawRegionStipple(ctx: CanvasRenderingContext2D, map: L.Map, region: DeadzoneRegion): void {
     const center = map.latLngToContainerPoint(L.latLng(region.center_lat, region.center_lon));
     const radius = regionRadiusPx(map, region);
-    const opacity = MIN_OPACITY + (MAX_OPACITY - MIN_OPACITY) * region.priority_score;
+    const score = region.priority_score;
+    const opacity = MIN_OPACITY + (MAX_OPACITY - MIN_OPACITY) * score;
+
+    // Scale dot size and density with severity — worst deadzones get bigger, denser dots
+    const dotRadius = MIN_DOT_RADIUS + (MAX_DOT_RADIUS - MIN_DOT_RADIUS) * score;
+    const dotSpacing = MAX_DOT_SPACING - (MAX_DOT_SPACING - MIN_DOT_SPACING) * score;
 
     ctx.save();
     ctx.globalAlpha = opacity;
     ctx.fillStyle = "white";
 
-    // Draw stippled dots within the circular region
     const startX = center.x - radius;
     const startY = center.y - radius;
     const endX = center.x + radius;
     const endY = center.y + radius;
 
-    for (let x = startX; x <= endX; x += DOT_SPACING) {
-      for (let y = startY; y <= endY; y += DOT_SPACING) {
+    for (let x = startX; x <= endX; x += dotSpacing) {
+      for (let y = startY; y <= endY; y += dotSpacing) {
         const dx = x - center.x;
         const dy = y - center.y;
         if (dx * dx + dy * dy <= radius * radius) {
           ctx.beginPath();
-          ctx.arc(x, y, DOT_RADIUS, 0, Math.PI * 2);
+          ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
           ctx.fill();
         }
       }

@@ -718,12 +718,8 @@ async def delete_tower_path(path_id: str) -> JSONResponse:
 # Deadzone analysis endpoint
 # ---------------------------------------------------------------------------
 
-# Simple in-memory cache for deadzone analysis results.  The cache is
-# invalidated whenever the tower count changes (a rough proxy for "towers
-# have changed").  This avoids re-running the expensive analysis on every
-# request while remaining correct enough for typical usage patterns.
-# TODO: Integrate proper cache invalidation when towers are created/deleted,
-#       and consider adding rate-limiting similar to the auth endpoints.
+# In-memory cache for deadzone analysis results.  Invalidated in predict()
+# and delete_tower() when the tower set changes.
 _deadzone_cache: dict[str, Any] = {"tower_count": 0, "result": None}
 
 

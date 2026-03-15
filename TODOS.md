@@ -163,7 +163,7 @@ Toggleable overlay that analyzes gaps in the combined coverage of all towers and
 ### Rendering
 - [x] Render deadzones as white dotted/stippled pattern on a canvas overlay layer
 - [x] Transparency scales with deadzone severity: complete deadzone (no signal from any tower) = 80% opaque white dots (alpha ≈ 204), near-threshold weak signal = nearly transparent, above-threshold coverage = fully transparent (no dots)
-- [ ] Dot density or size can optionally scale with severity for additional visual weight in the worst gaps
+- [x] Dot density or size can optionally scale with severity for additional visual weight in the worst gaps
 
 ### Suggestion markers
 - [x] For candidate points within or adjacent to deadzones, estimate how much deadzone area a new tower at that point would cover (based on terrain LOS from that point, using a simplified or cached SPLAT! model)
@@ -171,7 +171,7 @@ Toggleable overlay that analyzes gaps in the combined coverage of all towers and
 
 ### UI
 - [x] Add toggle in display settings: "Show deadzone remediation" (disabled until ≥2 towers exist)
-- [ ] Clicking a suggestion marker opens a popup with: estimated new coverage area, terrain summary, option to pre-fill the transmitter form with that location's coordinates
+- [x] Clicking a suggestion marker opens a popup with: estimated new coverage area, terrain summary, option to pre-fill the transmitter form with that location's coordinates
 - [x] Recompute suggestions when towers are added, removed, or simulations complete
 
 ## 13. Multi-source terrain data pipeline
@@ -221,3 +221,19 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Render paths as Leaflet polylines between tower markers (color-coded by path quality)
 - [x] Add toggle to show/hide mesh path overlay independently from coverage layers
 - [x] Recalculate affected paths when a tower is added or removed
+
+## 15. Mobile / responsive design
+
+### Critical
+- [ ] Add responsive breakpoints to all form columns (`col-12 col-sm-6` instead of fixed `col-6`) across Transmitter, Receiver, Environment, Simulation, Display components
+- [ ] Remove hardcoded `width: 38px; height: 31px` from color picker in Transmitter.vue — let Bootstrap handle sizing
+- [ ] Make colorbar image responsive in Display.vue (`max-width: 100%; height: auto` instead of fixed `width="256" height="30"`)
+
+### Medium
+- [ ] Add responsive stacking to TowerList items — tower name + buttons should stack vertically on narrow screens
+- [ ] Increase form row gap on mobile (`g-2` is tight at small sizes) — use `g-2 g-sm-2` with larger mobile gap or adjust padding
+- [ ] Increase antenna mismatch loss badge font size on mobile (0.7rem is too small on touch screens)
+
+### Minor
+- [ ] Prevent navbar brand text + buttons from overflowing on very narrow viewports (< 320px)
+- [ ] Add mobile-specific CSS rules in style.css for offcanvas sidebar behavior when virtual keyboard appears
