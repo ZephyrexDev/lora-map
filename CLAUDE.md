@@ -112,6 +112,9 @@ podman-compose up         # Dev convenience (optional)
 - **Preset dropdowns keyed by stable identifiers.** Use `name`, `code`, or `label` as `<option>` values — never array indices, which break when order changes.
 - **Clean up lifecycle resources.** Capture all timer IDs from `setTimeout`/`setInterval` and clear them in `onUnmounted`. Dispose Bootstrap instances (Popover, Tooltip, Modal) in `onUnmounted`. Never leave dangling event listeners or orphaned timers.
 - **Handle every promise.** Every `async` call must be `await`ed, `.catch()`-ed, or explicitly marked `void`. Unhandled rejections silently swallow errors.
+- **Always use `v-model.number` on numeric inputs.** Plain `v-model` on `<input type="number">` produces strings, causing silent NaN in downstream arithmetic. Every numeric `v-model` binding must use the `.number` modifier.
+- **Global initialization belongs in always-mounted components.** Never place `initMap()`, store bootstrap calls, or other one-time setup inside conditionally rendered components (`v-if`/`v-show`). Use `App.vue`'s `onMounted` for global initialization so it runs regardless of auth state.
+- **Every UI control must be wired to behavior.** If a form input collects a value, there must be a code path that consumes it. Unused controls (sliders, toggles, selectors) that silently do nothing are worse than missing controls — they erode user trust.
 
 ### General
 
