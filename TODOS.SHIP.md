@@ -32,7 +32,7 @@
 - [ ] 19. `splat.py` is 1028 lines — extract GeoTIFF/color modules (deferred: refactor only)
 - [x] 20. f-strings in `logger.debug(f"...")` evaluate eagerly — use lazy `%s` formatting
 - [x] 21. Dead `null_value` parameter on `_create_splat_geotiff` (`app/services/splat.py:586`) — remove
-- [ ] 22. `compose.yml` 12GB memory limit undocumented — add to deployment docs (deferred: docs only)
+- [x] 22. `compose.yml` 12GB memory limit undocumented — documented with rationale
 
 ---
 
@@ -56,8 +56,8 @@
 - [x] 30. `Literal[tuple(AVAILABLE_COLORMAPS)]` evaluated at import time (`CoveragePredictionRequest.py`) — defer
 - [x] 31. Deadzone scoring weights are magic numbers (`app/services/deadzone.py:284`) — extract to named constants
 - [x] 32. Raw SQL throughout codebase — migrated to SQLAlchemy ORM
-- [ ] 33. No retry mechanism for failed simulations — user must re-POST (deferred: acceptable for MVP)
-- [ ] 34. PPM image fully loaded into memory for large radius simulations (deferred: rare edge case)
+- [x] 33. No retry mechanism for failed simulations — added 2-attempt retry with 5s delay
+- [x] 34. PPM image fully loaded into memory for large radius simulations — downsample >4000px
 
 ## Round 3 — Frontend Pre-Ship Review (2026-03-15)
 
