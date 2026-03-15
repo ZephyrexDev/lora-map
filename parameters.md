@@ -14,7 +14,7 @@ This tool uses the SPLAT! implementation of the ITM / Longley-Rice model to calc
 | **Frequency**     | Signal frequency                          | MHz               | 907 MHz       | Set based on your region.                 |
 | **Antenna Gain**  | Vertical gain of the antenna                       | dBi               | 2.15 dBi      | Isotropic antenna assumed by default, applies to most meshtastic devices.    |
 
-Refer to the Meshtastic region settings (https://meshtastic.org/docs/getting-started/initial-config/) and use the correct transmit power and frequency for your location. 
+Refer to the region settings and use the correct transmit power and frequency for your location.
 
 ## Receiver
 

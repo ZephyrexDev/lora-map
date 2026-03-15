@@ -2,11 +2,11 @@
 
 ## 1. Rebrand to generic LoRa
 
-- [ ] Rename repo/package from `meshtastic-site-planner` to `lora-planner` (package.json `name` field)
+- [x] Rename repo/package from `meshtastic-site-planner` to `lora-planner` (package.json `name` field)
 - [ ] Replace "Meshtastic" with "LoRa" in all UI text, page titles, and meta tags
 - [ ] Replace Meshtastic logos/favicons in `public/` with generic branding
-- [ ] Update `index.html` title and meta
-- [ ] Remove `site.meshtastic.org` references from CORS config, comments, and deployment docs
+- [x] Update `index.html` title and meta
+- [x] Remove `site.meshtastic.org` references from CORS config, comments, and deployment docs
 - [ ] Rename `randanimal` site names if they reference Meshtastic concepts
 - [ ] Update README.md
 
@@ -32,13 +32,13 @@
 - [ ] Rewrite `/result/{task_id}` to stream GeoTIFF from SQLite
 - [ ] Add `GET /towers` endpoint to list all towers with metadata (no blobs)
 - [ ] Add `DELETE /towers/{id}` endpoint (admin-only)
-- [ ] Remove `redis` from `requirements.txt`
-- [ ] Remove Redis client initialization from `main.py`
+- [x] Remove `redis` from `requirements.txt`
+- [x] Remove Redis client initialization from `main.py`
 
 ## 4. Drop CORS and HTTPS
 
-- [ ] Remove `CORSMiddleware` from `main.py`
-- [ ] Remove CORS-related imports and comments
+- [x] Remove `CORSMiddleware` from `main.py`
+- [x] Remove CORS-related imports and comments
 - [ ] Ensure static files still served via `StaticFiles` mount on `/`
 - [ ] Verify API and UI work on same origin behind reverse proxy
 
