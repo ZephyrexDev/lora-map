@@ -23,7 +23,7 @@ app/                  → FastAPI backend
   matrix.py           → Client simulation matrix config and combinations
   services/           → SPLAT! wrapper + terrain data providers
   models/             → Pydantic request/response models
-  db/                 → SQLite schema, connection factory
+  db/                 → SQLAlchemy ORM models, engine/session factory, schema migrations
   ui/                 → Build output (frontend assets, gitignored)
 splat/                → Git submodule — SPLAT! C source
 public/               → Static assets (colormaps)
@@ -37,7 +37,7 @@ compose.yml           → Optional podman-compose for dev convenience
 ## Tech Stack
 
 - **Frontend:** Vue 3.5, TypeScript 5.9, Pinia, Leaflet 1.9, Bootstrap 5, Vite 7
-- **Backend:** Python 3.11, FastAPI, Pydantic 2, Uvicorn
+- **Backend:** Python 3.11, FastAPI, Pydantic 2, SQLAlchemy 2 (ORM), Uvicorn
 - **Storage:** SQLite (tower data, simulation results, GeoTIFF blobs)
 - **Data/Geo:** Rasterio, GDAL, NumPy, Matplotlib, Haversine, Boto3 (AWS S3 terrain tiles)
 - **Infra:** Podman (single container), sits behind an external HTTPS-terminating reverse proxy
@@ -88,7 +88,7 @@ podman-compose up         # Dev convenience (optional)
 - Use `logging` (module-level `logger = logging.getLogger(__name__)`) — never `print()` in backend code. Use lazy `%s` formatting (`logger.info("msg %s", val)`) — never f-strings in logger calls (they evaluate eagerly even when the level is disabled).
 - Handle exceptions at the appropriate level. Don't catch broad `Exception` unless re-raising or storing the error (as in the task runner pattern). Never leak internal exception messages to API callers — return generic messages and log the details server-side.
 - Prefer `pathlib.Path` over `os.path` for file operations.
-- Never interpolate table or column names into SQL. Use parameterized queries for values; validate identifiers against an allowlist if dynamic SQL is unavoidable.
+- **Use SQLAlchemy ORM for all application queries.** Use `db_session()` context manager, model classes (in `app/db/models.py`), and `session.query()` / `session.get()` — never raw SQL strings in application code. Raw SQL via `engine.connect()` is acceptable only in schema migrations (`app/db/schema.py`).
 - Use `hmac.compare_digest` for any security-sensitive string comparison (tokens, passwords). Never use `==` or `!=` for secrets.
 - Avoid module-level side effects that depend on environment variables or external state. Prefer lazy initialization (e.g., in FastAPI lifespan) so the app can start and report useful errors.
 - Always pass `timeout=` to `subprocess.run` calls. No subprocess should be able to hang indefinitely.
@@ -123,7 +123,7 @@ podman-compose up         # Dev convenience (optional)
 - **Naming:** Names should describe *what* something is or does, not *how*. Prefer `terrain_tile_cache` over `dc` or `cache1`.
 - **No secrets in code.** AWS credentials, API keys, and admin credentials must come from environment variables — never hardcoded. Auth tokens returned to clients must be opaque (random); never echo raw passwords or secrets back.
 - **Commits:** Write concise commit messages focused on *why*, not *what*. One logical change per commit.
-- **Schema changes require migrations.** Never rely on `CREATE TABLE IF NOT EXISTS` alone. Add a new versioned entry in `app/db/schema.py:MIGRATIONS` so existing databases get updated. The `schema_version` table tracks what's been applied.
+- **Schema changes require migrations.** Never rely on `CREATE TABLE IF NOT EXISTS` alone. Add a new versioned entry in `app/db/schema.py:MIGRATIONS` so existing databases get updated. The `schema_version` table tracks what's been applied. **Keep ORM models in sync** — after adding a migration, update the corresponding model in `app/db/models.py` to match the new schema state.
 - **Don't suppress linter warnings** (`# noqa`, `// eslint-disable`) without first trying to fix the root cause. Suppression is a last resort, not a shortcut.
 - **No HTTPS in app.** The app serves HTTP only on port 8080. TLS termination is handled by the external reverse proxy. Do not add SSL config, certificate handling, or HTTPS redirects.
 - **No CORS.** The reverse proxy serves both the API and static frontend on the same origin. Do not add CORS middleware.
