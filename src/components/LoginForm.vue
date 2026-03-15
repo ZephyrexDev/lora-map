@@ -10,7 +10,7 @@
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <form v-if="!store.isAdmin" @submit.prevent="handleLogin">
+            <form v-if="!store.isAdmin" @submit.prevent="() => handleLogin()">
               <div class="mb-3">
                 <label for="passwordInput" class="form-label">Password</label>
                 <input
@@ -37,7 +37,7 @@
             </form>
             <div v-else class="text-center">
               <p class="mb-3">You are logged in as admin.</p>
-              <button class="btn btn-outline-danger w-100" @click="handleLogout">Logout</button>
+              <button type="button" class="btn btn-outline-danger w-100" @click="() => handleLogout()">Logout</button>
             </div>
           </div>
         </div>

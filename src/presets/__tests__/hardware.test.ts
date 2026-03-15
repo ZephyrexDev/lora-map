@@ -9,19 +9,22 @@ describe("HARDWARE_PRESETS", () => {
   it("V3 has is_custom=false", () => {
     const v3 = HARDWARE_PRESETS.find((h) => h.name === "Heltec V3");
     expect(v3).toBeDefined();
-    expect(v3!.is_custom).toBe(false);
+    if (!v3) throw new Error("expected V3 preset");
+    expect(v3.is_custom).toBe(false);
   });
 
   it("V4 has is_custom=false", () => {
     const v4 = HARDWARE_PRESETS.find((h) => h.name === "Heltec V4");
     expect(v4).toBeDefined();
-    expect(v4!.is_custom).toBe(false);
+    if (!v4) throw new Error("expected V4 preset");
+    expect(v4.is_custom).toBe(false);
   });
 
   it("Custom has is_custom=true", () => {
     const custom = HARDWARE_PRESETS.find((h) => h.name === "Custom");
     expect(custom).toBeDefined();
-    expect(custom!.is_custom).toBe(true);
+    if (!custom) throw new Error("expected Custom preset");
+    expect(custom.is_custom).toBe(true);
   });
 
   it("all presets have required fields", () => {

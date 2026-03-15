@@ -7,7 +7,7 @@
           id="client-hardware"
           v-model="store.clientHardware"
           class="form-select form-select-sm"
-          @change="onSelectionChange"
+          @change="() => onSelectionChange()"
         >
           <option v-for="hw in enabledHardware" :key="hw.key" :value="hw.key">
             {{ hw.label }}
@@ -20,7 +20,7 @@
           id="client-antenna"
           v-model="store.clientAntenna"
           class="form-select form-select-sm"
-          @change="onSelectionChange"
+          @change="() => onSelectionChange()"
         >
           <option v-for="ant in enabledAntennas" :key="ant.key" :value="ant.key">
             {{ ant.label }}
@@ -35,7 +35,7 @@
           id="client-terrain"
           v-model="store.clientTerrain"
           class="form-select form-select-sm"
-          @change="onSelectionChange"
+          @change="() => onSelectionChange()"
         >
           <option v-for="ter in enabledTerrain" :key="ter.key" :value="ter.key">
             {{ ter.label }}

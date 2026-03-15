@@ -94,14 +94,22 @@ describe("dbmToRgba", () => {
   });
 
   it("weakest signal (minDbm) gets alpha ≈ 230/255 (nearly opaque)", () => {
-    const result = dbmToRgba(-130, hex, minDbm, maxDbm)!;
-    const alpha = parseFloat(result.match(/,([\d.]+)\)$/)![1]);
+    const result = dbmToRgba(-130, hex, minDbm, maxDbm);
+    expect(result).toBeDefined();
+    if (!result) throw new Error("expected result");
+    const match = result.match(/,([\d.]+)\)$/);
+    if (!match) throw new Error("expected match");
+    const alpha = parseFloat(match[1]);
     expect(alpha).toBeCloseTo(230 / 255, 2);
   });
 
   it("strongest signal (maxDbm) gets alpha ≈ 51/255 (mostly transparent)", () => {
-    const result = dbmToRgba(-80, hex, minDbm, maxDbm)!;
-    const alpha = parseFloat(result.match(/,([\d.]+)\)$/)![1]);
+    const result = dbmToRgba(-80, hex, minDbm, maxDbm);
+    expect(result).toBeDefined();
+    if (!result) throw new Error("expected result");
+    const match = result.match(/,([\d.]+)\)$/);
+    if (!match) throw new Error("expected match");
+    const alpha = parseFloat(match[1]);
     expect(alpha).toBeCloseTo(51 / 255, 2);
   });
 
@@ -118,14 +126,20 @@ describe("dbmToRgba", () => {
   });
 
   it("mid-range value has intermediate alpha", () => {
-    const result = dbmToRgba(-105, hex, minDbm, maxDbm)!;
-    const alpha = parseFloat(result.match(/,([\d.]+)\)$/)![1]);
+    const result = dbmToRgba(-105, hex, minDbm, maxDbm);
+    expect(result).toBeDefined();
+    if (!result) throw new Error("expected result");
+    const match = result.match(/,([\d.]+)\)$/);
+    if (!match) throw new Error("expected match");
+    const alpha = parseFloat(match[1]);
     expect(alpha).toBeGreaterThan(51 / 255);
     expect(alpha).toBeLessThan(230 / 255);
   });
 
   it("uses the provided hex color", () => {
-    const result = dbmToRgba(-100, "#00ff80", minDbm, maxDbm)!;
+    const result = dbmToRgba(-100, "#00ff80", minDbm, maxDbm);
+    expect(result).toBeDefined();
+    if (!result) throw new Error("expected result");
     expect(result).toMatch(/^rgba\(0,255,128,/);
   });
 });

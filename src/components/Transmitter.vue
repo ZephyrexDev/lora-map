@@ -1,5 +1,5 @@
 <template>
-  <form ref="formRef" novalidate @submit.prevent @input="validateForm">
+  <form ref="formRef" novalidate @submit.prevent @input="() => validateForm()">
     <div class="row g-2">
       <div class="col-12 col-sm-8">
         <label for="name" class="form-label">Site name</label>
@@ -30,7 +30,7 @@
               class="form-check-input"
               type="checkbox"
               :checked="transmitter.tx_color === ''"
-              @change="toggleAutoColor"
+              @change="() => toggleAutoColor()"
             />
             <label class="form-check-label small" for="tx_color_auto">Auto</label>
           </div>
@@ -80,7 +80,7 @@
           id="hardwarePreset"
           v-model="selectedHardware"
           class="form-select form-select-sm"
-          @change="onHardwareChange"
+          @change="() => onHardwareChange()"
         >
           <option value="">Custom</option>
           <option v-for="hw in HARDWARE_PRESETS" :key="hw.name" :value="hw.name">
@@ -90,7 +90,7 @@
       </div>
       <div class="col-12 col-sm-6">
         <label for="regionPreset" class="form-label">Country / Region</label>
-        <select id="regionPreset" v-model="selectedRegion" class="form-select form-select-sm" @change="onRegionChange">
+        <select id="regionPreset" v-model="selectedRegion" class="form-select form-select-sm" @change="() => onRegionChange()">
           <option value="">Custom</option>
           <option v-for="freq in FREQUENCY_PRESETS" :key="freq.code" :value="freq.code">
             {{ freq.region }} ({{ freq.code }}) — {{ freq.frequency_mhz }} MHz
@@ -106,7 +106,7 @@
             id="antennaPreset"
             v-model="selectedAntenna"
             class="form-select form-select-sm flex-grow-1"
-            @change="onAntennaChange"
+            @change="() => onAntennaChange()"
           >
             <option value="">Custom</option>
             <option v-for="ant in ANTENNA_PRESETS" :key="ant.name" :value="ant.name">
@@ -124,7 +124,7 @@
       </div>
       <div class="col-12 col-sm-6">
         <label for="heightPreset" class="form-label">Height Preset</label>
-        <select id="heightPreset" v-model="selectedHeight" class="form-select form-select-sm" @change="onHeightChange">
+        <select id="heightPreset" v-model="selectedHeight" class="form-select form-select-sm" @change="() => onHeightChange()">
           <option value="">Custom</option>
           <option v-for="h in HEIGHT_PRESETS" :key="h.label" :value="h.label">{{ h.label }} ({{ h.height_m }} m)</option>
         </select>
@@ -210,11 +210,11 @@
         title="Set Coordinates"
         data-bs-content=""
         content="Click on the map to set the transmitter location."
-        @click="setWithMap"
+        @click="() => setWithMap()"
       >
         Set with Map
       </button>
-      <button type="button" class="btn btn-secondary btn-sm" @click="centerMapOnTransmitter">
+      <button type="button" class="btn btn-secondary btn-sm" @click="() => centerMapOnTransmitter()">
         Center map on transmitter
       </button>
     </div>
@@ -303,8 +303,6 @@ const centerMapOnTransmitter = () => {
   if (!store.map) return;
   if (!isNaN(transmitter.tx_lat) && !isNaN(transmitter.tx_lon)) {
     store.map.setView([transmitter.tx_lat, transmitter.tx_lon], store.map.getZoom());
-  } else {
-    alert("Please enter valid Latitude and Longitude values.");
   }
 };
 let popover: bootstrap.Popover | null = null;

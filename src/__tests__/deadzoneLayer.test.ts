@@ -41,8 +41,9 @@ describe("DeadzoneRegion data model", () => {
       },
     });
     expect(region.suggestion).not.toBeNull();
-    expect(region.suggestion!.priority_rank).toBe(1);
-    expect(region.suggestion!.estimated_coverage_km2).toBe(12.5);
+    if (!region.suggestion) throw new Error("expected suggestion");
+    expect(region.suggestion.priority_rank).toBe(1);
+    expect(region.suggestion.estimated_coverage_km2).toBe(12.5);
   });
 
   it("priority_score is between 0 and 1", () => {

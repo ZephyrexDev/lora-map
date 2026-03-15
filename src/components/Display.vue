@@ -61,7 +61,7 @@
           id="overlap_mode"
           v-model="display.overlapMode"
           class="form-select form-select-sm"
-          @change="onOverlapModeChange"
+          @change="() => onOverlapModeChange()"
         >
           <option value="hatch">Hatched</option>
           <option value="blend">Alpha Blend</option>
@@ -90,7 +90,7 @@
         role="switch"
         :checked="store.showDeadzones"
         :disabled="store.localSites.length < 2"
-        @change="store.toggleDeadzones()"
+        @change="() => store.toggleDeadzones()"
       />
       <label class="form-check-label" for="deadzoneToggle"> Show deadzone remediation </label>
     </div>

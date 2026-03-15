@@ -42,16 +42,16 @@ function sampleRaster(raster: GeoRaster, lat: number, lng: number): number | nul
   const row = Math.floor((ymax - lat) / pixelHeight);
 
   const band = values[0]; // first band
-  if (!band || row < 0 || row >= band.length) {
+  if (row < 0 || row >= band.length) {
     return null;
   }
   const rowData = band[row];
-  if (!rowData || col < 0 || col >= rowData.length) {
+  if (col < 0 || col >= rowData.length) {
     return null;
   }
 
   const val = rowData[col];
-  if (val === noDataValue || val === 255 || val === undefined || val === null) {
+  if (val === noDataValue || val === 255) {
     return null;
   }
 
@@ -126,8 +126,8 @@ const OverlapHatchLayer = L.GridLayer.extend({
         const towerValues: (number | null)[] = [];
         let coverageCount = 0;
 
-        for (let t = 0; t < towers.length; t++) {
-          const val = sampleRaster(towers[t].raster, lat, lng);
+        for (const tower of towers) {
+          const val = sampleRaster(tower.raster, lat, lng);
           towerValues.push(val);
           if (val !== null) {
             coverageCount++;
@@ -141,9 +141,10 @@ const OverlapHatchLayer = L.GridLayer.extend({
         if (coverageCount === 1) {
           // Single tower: solid color with signal-based alpha
           for (let t = 0; t < towers.length; t++) {
-            if (towerValues[t] !== null) {
+            const tv = towerValues[t];
+            if (tv !== null) {
               const [r, g, b] = parsedColors[t];
-              const alpha = signalToAlpha(towerValues[t]!, minDbm, maxDbm);
+              const alpha = signalToAlpha(tv, minDbm, maxDbm);
               data[pixelOffset] = r;
               data[pixelOffset + 1] = g;
               data[pixelOffset + 2] = b;
@@ -160,8 +161,9 @@ const OverlapHatchLayer = L.GridLayer.extend({
           let maxAlpha = 0;
 
           for (let t = 0; t < towers.length; t++) {
-            if (towerValues[t] !== null) {
-              const alpha = signalToAlpha(towerValues[t]!, minDbm, maxDbm);
+            const tv = towerValues[t];
+            if (tv !== null) {
+              const alpha = signalToAlpha(tv, minDbm, maxDbm);
               const weight = alpha;
               const [r, g, b] = parsedColors[t];
               rSum += r * weight;
@@ -187,8 +189,9 @@ const OverlapHatchLayer = L.GridLayer.extend({
           let totalSignal = 0;
           const towerSignals: number[] = [];
           for (let t = 0; t < towers.length; t++) {
-            if (towerValues[t] !== null) {
-              const sig = towerValues[t]! - minDbm; // normalize to positive
+            const tv = towerValues[t];
+            if (tv !== null) {
+              const sig = tv - minDbm; // normalize to positive
               towerSignals.push(Math.max(0, sig));
               totalSignal += Math.max(0, sig);
             } else {
@@ -226,7 +229,9 @@ const OverlapHatchLayer = L.GridLayer.extend({
             // then "off" for (STRIPE_PERIOD - stripeWidth) pixels
             const modPos = ((proj % STRIPE_PERIOD) + STRIPE_PERIOD) % STRIPE_PERIOD;
             if (modPos < stripeWidth) {
-              const alpha = signalToAlpha(towerValues[t]!, minDbm, maxDbm);
+              const tvForAlpha = towerValues[t];
+              if (tvForAlpha === null) continue;
+              const alpha = signalToAlpha(tvForAlpha, minDbm, maxDbm);
               if (alpha > bestAlpha || bestTower === -1) {
                 bestTower = t;
                 bestAlpha = alpha;
@@ -246,8 +251,9 @@ const OverlapHatchLayer = L.GridLayer.extend({
             let strongest = -1;
             let strongestVal = -Infinity;
             for (let t = 0; t < towers.length; t++) {
-              if (towerValues[t] !== null && towerValues[t]! > strongestVal) {
-                strongestVal = towerValues[t]!;
+              const tv = towerValues[t];
+              if (tv !== null && tv > strongestVal) {
+                strongestVal = tv;
                 strongest = t;
               }
             }

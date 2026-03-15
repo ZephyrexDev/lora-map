@@ -37,7 +37,7 @@ const useStore = defineStore("store", {
       simulationState: "idle",
       simulationError: "" as string,
       isAdmin: false,
-      adminToken: localStorage.getItem("adminToken") || "",
+      adminToken: localStorage.getItem("adminToken") ?? "",
       clientHardware: "v3" as string,
       clientAntenna: "bingfu_whip" as string,
       clientTerrain: "bare_earth" as string,
@@ -100,14 +100,14 @@ const useStore = defineStore("store", {
         const towers: { id: string; name: string; color: string | null; params: Record<string, unknown> }[] =
           data.towers ?? [];
 
-        for (const tower of towers) {
-          // Skip if already loaded locally
-          if (this.localSites.find((s: Site) => s.taskId === tower.id)) continue;
+        const newTowers = towers.filter(
+          (tower) => !this.localSites.find((s: Site) => s.taskId === tower.id),
+        );
 
-          // Find the default simulation result (first completed bare_earth sim)
-          try {
+        const fetchResults = await Promise.allSettled(
+          newTowers.map(async (tower) => {
             const simResponse = await fetch(`/towers/${tower.id}/simulations?enabled_only=true`);
-            if (!simResponse.ok) continue;
+            if (!simResponse.ok) return null;
             const simData = await simResponse.json();
             const sims: SimulationRecord[] = simData.simulations ?? [];
             const completedSim =
@@ -119,29 +119,38 @@ const useStore = defineStore("store", {
                   s.terrain_model === "bare_earth",
               ) ?? sims.find((s) => s.status === "completed");
 
-            if (!completedSim) continue;
+            if (!completedSim) return null;
 
             const resultResponse = await fetch(`/simulations/${completedSim.id}/result`);
-            if (!resultResponse.ok) continue;
+            if (!resultResponse.ok) return null;
             const arrayBuffer = await resultResponse.arrayBuffer();
             const geoRaster = await parseGeoraster(arrayBuffer);
 
-            const colorIndex = this.localSites.length % TOWER_COLORS.length;
-            const params = tower.params as Record<string, unknown>;
-            if (!params.transmitter || !params.receiver || !params.environment || !params.simulation || !params.display) {
-              console.warn("Skipping tower with malformed params:", tower.id);
-              continue;
+            return { tower, geoRaster };
+          }),
+        );
+
+        for (const result of fetchResults) {
+          if (result.status !== "fulfilled" || !result.value) {
+            if (result.status === "rejected") {
+              console.warn("Error loading simulation for tower:", result.reason);
             }
-            this.localSites.push({
-              params: params as SplatParams,
-              taskId: tower.id,
-              raster: geoRaster,
-              color: tower.color || TOWER_COLORS[colorIndex],
-              visible: true,
-            });
-          } catch (err) {
-            console.warn("Error loading simulation for tower:", tower.id, err);
+            continue;
           }
+          const { tower, geoRaster } = result.value;
+          const { params } = tower;
+          if (!params.transmitter || !params.receiver || !params.environment || !params.simulation || !params.display) {
+            console.warn("Skipping tower with malformed params:", tower.id);
+            continue;
+          }
+          const colorIndex = this.localSites.length % TOWER_COLORS.length;
+          this.localSites.push({
+            params: params as SplatParams,
+            taskId: tower.id,
+            raster: geoRaster,
+            color: tower.color ?? TOWER_COLORS[colorIndex],
+            visible: true,
+          });
         }
 
         if (this.localSites.length > 0) {
@@ -203,7 +212,7 @@ const useStore = defineStore("store", {
           },
         );
 
-        const lossText = path.path_loss_db !== null ? `${path.path_loss_db.toFixed(1)} dB` : "pending";
+        const lossText = `${path.path_loss_db.toFixed(1)} dB`;
         let losText = "pending";
         if (path.has_los !== null) {
           losText = path.has_los ? "Yes" : "No";
@@ -400,7 +409,6 @@ const useStore = defineStore("store", {
     async removeSite(index: number) {
       if (!this.map) return;
       const site = this.localSites[index];
-      if (!site) return;
 
       // Delete from backend if we have admin credentials and a tower ID
       if (this.adminToken && site.taskId) {
@@ -418,9 +426,10 @@ const useStore = defineStore("store", {
       }
 
       this.localSites.splice(index, 1);
-      this.map.eachLayer((layer: L.Layer) => {
+      const { map } = this;
+      map.eachLayer((layer: L.Layer) => {
         if (layer instanceof GeoRasterLayer) {
-          this.map!.removeLayer(layer);
+          map.removeLayer(layer);
         }
       });
       this.redrawSites();
@@ -442,11 +451,12 @@ const useStore = defineStore("store", {
       if (!this.map) {
         return;
       }
+      const { map } = this;
 
       // Remove existing GeoRasterLayers
-      this.map.eachLayer((layer: L.Layer) => {
+      map.eachLayer((layer: L.Layer) => {
         if (layer instanceof GeoRasterLayer) {
-          this.map!.removeLayer(layer);
+          map.removeLayer(layer);
         }
       });
 
@@ -477,7 +487,7 @@ const useStore = defineStore("store", {
       }
 
       // Collect all visible sites that have raster data
-      const visibleSites = this.localSites.filter((s: Site) => s.visible && s.raster);
+      const visibleSites = this.localSites.filter((s: Site) => s.visible);
 
       // Only create overlap layer when 2+ visible towers
       if (visibleSites.length < 2) {
@@ -658,7 +668,7 @@ const useStore = defineStore("store", {
             }
           } else if (statusData.status === "failed") {
             this.simulationState = "failed";
-            const errorMsg = statusData.error || "Unknown error";
+            const errorMsg = statusData.error ?? "Unknown error";
             console.error("Simulation failed:", errorMsg);
             this.simulationError = errorMsg;
           } else {

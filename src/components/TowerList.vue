@@ -27,7 +27,7 @@
             style="min-width: 36px; min-height: 36px"
             :title="site.visible ? 'Hide layer' : 'Show layer'"
             :aria-label="site.visible ? 'Hide layer' : 'Show layer'"
-            @click="store.toggleSiteVisibility(index)"
+            @click="() => store.toggleSiteVisibility(index)"
           >
             <span v-if="site.visible">&#x1F441;&#xFE0F;</span>
             <span v-else class="text-muted">&#x1F6AB;</span>
@@ -39,7 +39,7 @@
             style="min-width: 36px; min-height: 36px"
             title="Delete tower"
             aria-label="Delete tower"
-            @click="store.removeSite(index)"
+            @click="() => store.removeSite(index)"
           >
             &#x1F5D1;&#xFE0F;
           </button>
@@ -52,7 +52,7 @@
         type="button"
         class="btn btn-sm w-100"
         :class="store.showTowerPaths ? 'btn-outline-info' : 'btn-outline-secondary'"
-        @click="store.toggleTowerPaths()"
+        @click="() => store.toggleTowerPaths()"
       >
         {{ store.showTowerPaths ? "Hide Mesh Paths" : "Show Mesh Paths" }}
       </button>
@@ -60,7 +60,7 @@
         v-if="store.isAdmin"
         type="button"
         class="btn btn-sm btn-outline-warning w-100 mt-1"
-        @click="recomputePaths()"
+        @click="() => recomputePaths()"
       >
         Recompute Paths
       </button>
@@ -85,23 +85,26 @@ let pathReloadTimer: ReturnType<typeof setTimeout> | null = null;
 async function fetchProgress() {
   if (!store.isAdmin) return;
 
-  let anyPending = false;
-
-  for (const site of store.localSites) {
-    if (!site.taskId) continue;
-    try {
+  const sites = store.localSites.filter((s) => s.taskId);
+  const results = await Promise.allSettled(
+    sites.map(async (site) => {
       const response = await fetch(`/towers/${site.taskId}/simulations`);
-      if (!response.ok) continue;
+      if (!response.ok) return null;
       const data = await response.json();
       const sims: { status: string }[] = data.simulations ?? [];
       const total = sims.length;
       const completed = sims.filter((s) => s.status === "completed").length;
       const pending = sims.filter((s) => s.status === "pending" || s.status === "processing").length;
-      progress.value[site.taskId] = { total, completed, pending };
-      if (pending > 0) anyPending = true;
-    } catch {
-      // ignore fetch errors
-    }
+      return { taskId: site.taskId, total, completed, pending };
+    }),
+  );
+
+  let anyPending = false;
+  for (const result of results) {
+    if (result.status !== "fulfilled" || !result.value) continue;
+    const { taskId, total, completed, pending } = result.value;
+    progress.value[taskId] = { total, completed, pending };
+    if (pending > 0) anyPending = true;
   }
 
   // Poll every 5 seconds while any simulations are pending

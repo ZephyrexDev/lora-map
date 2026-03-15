@@ -8,6 +8,7 @@
         </a>
         <div class="d-flex align-items-center flex-shrink-0">
           <button
+            type="button"
             class="btn btn-sm me-2"
             :class="store.isAdmin ? 'btn-outline-success' : 'btn-outline-secondary'"
             data-bs-toggle="modal"
@@ -240,9 +241,9 @@ const buttonText = () => {
     return "Running";
   } else if ("failed" === store.simulationState) {
     return "Failed";
-  } else {
+  } 
     return "Run Simulation";
-  }
+  
 };
 </script>
 

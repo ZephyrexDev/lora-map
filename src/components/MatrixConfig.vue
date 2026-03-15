@@ -9,7 +9,7 @@
             class="form-check-input"
             type="checkbox"
             :checked="config.hardware[hw.key]"
-            @change="toggle('hardware', hw.key)"
+            @change="() => toggle('hardware', hw.key)"
           />
           <label class="form-check-label" :for="'hw-' + hw.key">{{ hw.label }}</label>
         </div>
@@ -24,7 +24,7 @@
             class="form-check-input"
             type="checkbox"
             :checked="config.antennas[ant.key]"
-            @change="toggle('antennas', ant.key)"
+            @change="() => toggle('antennas', ant.key)"
           />
           <label class="form-check-label" :for="'ant-' + ant.key">{{ ant.label }}</label>
         </div>
@@ -39,7 +39,7 @@
             class="form-check-input"
             type="checkbox"
             :checked="config.terrain[ter.key]"
-            @change="toggle('terrain', ter.key)"
+            @change="() => toggle('terrain', ter.key)"
           />
           <label class="form-check-label" :for="'ter-' + ter.key">{{ ter.label }}</label>
         </div>
@@ -100,7 +100,7 @@ onMounted(async () => {
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
 async function toggle(section: keyof MatrixConfig, key: string) {
-  (config[section] as Record<string, boolean>)[key] = !config[section][key];
+  (config[section])[key] = !config[section][key];
   try {
     const response = await fetch("/matrix/config", {
       method: "PUT",

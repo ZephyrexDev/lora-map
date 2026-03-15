@@ -39,7 +39,7 @@ class DeadzoneCanvasLayer extends L.Layer {
 
   onAdd(map: L.Map): this {
     this._map = map;
-    this._canvas = L.DomUtil.create("canvas", "deadzone-canvas-layer") as HTMLCanvasElement;
+    this._canvas = L.DomUtil.create("canvas", "deadzone-canvas-layer");
     const pane = map.getPane("overlayPane");
     if (pane) {
       pane.appendChild(this._canvas);
@@ -53,7 +53,7 @@ class DeadzoneCanvasLayer extends L.Layer {
   }
 
   onRemove(map: L.Map): this {
-    if (this._canvas && this._canvas.parentNode) {
+    if (this._canvas?.parentNode) {
       this._canvas.parentNode.removeChild(this._canvas);
     }
     map.off("moveend zoomend resize", this._redraw, this);
