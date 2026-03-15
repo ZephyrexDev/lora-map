@@ -4,7 +4,7 @@
 
 - [x] Rename repo/package from `meshtastic-site-planner` to `lora-planner` (package.json `name` field)
 - [x] Replace "Meshtastic" with "LoRa" in all UI text, page titles, and meta tags
-- [ ] Replace Meshtastic logos/favicons in `public/` with generic branding
+- [x] Replace Meshtastic logos/favicons in `public/` with transparent placeholders
 - [x] Update `index.html` title and meta
 - [x] Remove `site.meshtastic.org` references from CORS config, comments, and deployment docs
 - [x] Rename `randanimal` site names if they reference Meshtastic concepts (N/A — randanimal is generic)
@@ -79,11 +79,15 @@
 
 Towers have fixed hardware/antenna/height configs set by admin. The matrix varies the **client (receiver)** side — showing "what coverage does a visitor with client hardware X and antenna Y see from this tower?"
 
-- [ ] Define client simulation matrix: client hardware (V3, V4) × client antenna (4 options) = 8 receiver configurations per tower
-- [ ] Matrix varies receiver gain, sensitivity, and SWR mismatch loss — tower TX params stay fixed
+- [ ] Define client simulation matrix: client hardware (V3, V4) × client antenna (4 options) × terrain model (3 modes) = 24 receiver/terrain configurations per tower
+- [ ] Matrix varies receiver gain, sensitivity, SWR mismatch loss, and terrain model — tower TX params stay fixed
+- [ ] Three terrain model modes per simulation:
+  - **Bare-earth SRTM** — existing behavior, standard 1/3-arcsecond SRTM DTM tiles from AWS Open Data
+  - **DSM (Digital Surface Model)** — includes buildings and tree canopy as elevation; sources: USGS 3DEP (US), provincial LiDAR (Canada), Copernicus GLO-30 DSM. SPLAT! treats surface features as terrain that naturally blocks signals — no code changes to the propagation model
+  - **LULC-burned clutter** — SRTM bare-earth tiles with per-pixel clutter heights added from ESA WorldCover (10m, global, free). Land cover classes map to clutter heights (e.g., forest=12m, suburban=8m, urban=20m, cropland=0m, water=0m). Synthetic but global coverage with no DSM gaps
 - [ ] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower
-- [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna
-- [ ] Add UI selector for visitors to pick their client hardware + antenna and instantly see the matching cached coverage layer
+- [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna + terrain_model
+- [ ] Add UI selector for visitors to pick their client hardware + antenna + terrain model and instantly see the matching cached coverage layer
 - [ ] On tower creation, auto-queue the full client matrix as background tasks
 - [ ] Show matrix completion progress in admin UI
 
@@ -130,7 +134,59 @@ Where multiple towers overlap, the area uses cross-hatched line shading — each
 - [ ] Each tower gets a unique stripe angle (e.g., tower A = 45°, tower B = 135°) for natural cross-hatching
 - [ ] Toggle between "hatched overlap" and "simple alpha blend" modes in display settings
 
-## 12. Meshcore tower path simulation
+## 12. Deadzone remediation suggestion layer
+
+Toggleable overlay that analyzes gaps in the combined coverage of all towers and highlights deadzones. Rendered as a **white dotted pattern** with transparency proportional to deadzone severity: areas with zero coverage from any tower are **80% opaque** (strong white dots), areas with weak partial coverage fade toward fully transparent. Requires at least 2 existing towers with completed simulations.
+
+### Analysis
+- [ ] Compute a "coverage gap" raster from all active tower simulations: for each pixel, record the best signal from any tower (or no-coverage if below threshold everywhere)
+- [ ] Identify contiguous deadzone regions (connected components of no-coverage pixels within the simulation extent)
+- [ ] Score each deadzone by area and proximity to existing coverage edges — large gaps adjacent to near-threshold signal are highest priority (a new tower there extends the network most efficiently)
+- [ ] Filter out deadzones that are too small (noise) or too far from any existing coverage (unreachable by a single new tower)
+
+### Rendering
+- [ ] Render deadzones as white dotted/stippled pattern on a canvas overlay layer
+- [ ] Transparency scales with deadzone severity: complete deadzone (no signal from any tower) = 80% opaque white dots (alpha ≈ 204), near-threshold weak signal = nearly transparent, above-threshold coverage = fully transparent (no dots)
+- [ ] Dot density or size can optionally scale with severity for additional visual weight in the worst gaps
+
+### Suggestion markers
+- [ ] For candidate points within or adjacent to deadzones, estimate how much deadzone area a new tower at that point would cover (based on terrain LOS from that point, using a simplified or cached SPLAT! model)
+- [ ] Show top-N suggested sites as numbered markers with estimated coverage gain (e.g., "~12 km² new coverage")
+
+### UI
+- [ ] Add toggle in display settings: "Show deadzone remediation" (disabled until ≥2 towers exist)
+- [ ] Clicking a suggestion marker opens a popup with: estimated new coverage area, terrain summary, option to pre-fill the transmitter form with that location's coordinates
+- [ ] Recompute suggestions when towers are added, removed, or simulations complete
+
+## 13. Multi-source terrain data pipeline
+
+Support three terrain elevation sources that feed into SPLAT! via the existing tile preprocessing step (`_convert_hgt_to_sdf`). SPLAT! itself doesn't change — it always reads `.sdf` tiles. The difference is what elevation values those tiles contain.
+
+### Bare-earth SRTM (existing)
+- [x] Download 1-arcsecond SRTM `.hgt.gz` tiles from AWS `elevation-tiles-prod`
+- [x] Downsample to 3-arcsecond for standard resolution mode
+- [x] Convert to SPLAT! `.sdf` via `srtm2sdf`
+
+### DSM (Digital Surface Model)
+- [ ] Add DSM tile source support: USGS 3DEP (US), Copernicus GLO-30 DSM (global 30m, free via AWS/OpenData), provincial LiDAR (Canada)
+- [ ] DSM tiles include buildings and tree canopy as elevation — SPLAT! treats them as terrain that blocks signals
+- [ ] Implement DSM tile downloader with same cache pattern as SRTM (`diskcache` keyed by `dsm:{tile_name}`)
+- [ ] Fall back to bare-earth SRTM for tiles where DSM data is unavailable
+- [ ] Convert DSM `.hgt` to `.sdf` using same `srtm2sdf` pipeline
+
+### LULC-burned clutter
+- [ ] Download ESA WorldCover tiles (10m GeoTIFF, global, free) — classify each pixel as tree cover, shrubland, grassland, cropland, built-up, bare/sparse, water, wetland, etc.
+- [ ] Define clutter height lookup table per land cover class (e.g., tree cover=12m, built-up=20m, shrubland=3m, cropland=0m, water=0m)
+- [ ] In tile preprocessing: load SRTM bare-earth tile + co-located WorldCover tile, resample WorldCover to match SRTM grid, add per-pixel clutter height to elevation values
+- [ ] Cache the burned tiles separately (`lulc:{tile_name}`) so bare-earth originals remain available
+- [ ] Convert burned `.hgt` to `.sdf` using same `srtm2sdf` pipeline
+
+### Terrain model selection
+- [ ] Add `terrain_model` field to `CoveragePredictionRequest`: `"bare_earth"` (default), `"dsm"`, `"lulc_clutter"`
+- [ ] Route tile download/preprocessing through the selected model in `coverage_prediction()`
+- [ ] Store terrain model used alongside each simulation result in SQLite
+
+## 14. Meshcore tower path simulation
 
 - [ ] Add SPLAT! point-to-point analysis function in `app/services/splat.py`
 - [ ] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers

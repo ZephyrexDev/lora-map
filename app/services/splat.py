@@ -134,7 +134,7 @@ class Splat:
         Raises:
             RuntimeError: If SPLAT! fails to execute.
         """
-        logger.debug(f"Coverage prediction request: {request.json()}")
+        logger.debug(f"Coverage prediction request: {request.model_dump_json()}")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             try:

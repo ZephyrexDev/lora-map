@@ -10,9 +10,9 @@ This tool uses the SPLAT! implementation of the ITM / Longley-Rice model to calc
 | **Latitude**      | Latitude of the transmitter               | Decimal Degrees   | None          | Transmitter location.          |
 | **Longitude**     | Longitude of the transmitter              | Decimal Degrees   | None          | Transmitter location.         |
 | **Antenna Height**| Height of the transmitter above ground    | Meters            | 2 m           | Should include mast or tower height.      |
-| **Transmit Power**| Power output of the transmitter           | Watts             | 0.1 W         | Set based on your Meshtastic device and region, defaults to 0.1W / 30 dBm. |
+| **Transmit Power**| Power output of the transmitter           | Watts             | 0.1 W         | Set based on your LoRa device and region, defaults to 0.1W / 30 dBm. |
 | **Frequency**     | Signal frequency                          | MHz               | 907 MHz       | Set based on your region.                 |
-| **Antenna Gain**  | Vertical gain of the antenna                       | dBi               | 2.15 dBi      | Isotropic antenna assumed by default, applies to most meshtastic devices.    |
+| **Antenna Gain**  | Vertical gain of the antenna                       | dBi               | 2.15 dBi      | Isotropic antenna assumed by default, applies to most LoRa devices.    |
 
 Refer to the region settings and use the correct transmit power and frequency for your location.
 
@@ -25,9 +25,9 @@ Refer to the region settings and use the correct transmit power and frequency fo
 | **Antenna Gain**   | Gain of the receiver's antenna              | dBi              | 2.15 dBi      | Assumes an isotropic antenna.             |
 | **Cable Loss**     | Loss in signal strength due to cable attenuation | dB            | 2 dB          | Assumes a 2 dB additional cable loss.     |
 
-Choose your receiver sensitivity based on the channel (defaults to `LongFast`). It is realistic to reduce the theoretical values to account for radio noise in the local environment. This is particularly important in urban regions, where the Meshtastic channels are shared with other services.
+Choose your receiver sensitivity based on the channel (defaults to `LongFast`). It is realistic to reduce the theoretical values to account for radio noise in the local environment. This is particularly important in urban regions, where the LoRa channels are shared with other services.
 
-### Approximate Sensitivities for Meshtastic Channels:
+### Approximate Sensitivities for LoRa Channels:
 
 | Channel Setting   | Spreading Factor (SF) | Bandwidth (BW) | Estimated Sensitivity |
 |-------------------|-----------------------|----------------|-----------------------|
@@ -65,4 +65,4 @@ For most applications, do not alter the `Ground Conductivity` or `Atmospheric Be
 
 Maximum simulation distances greater than 50 kilometers will result in longer computation times. We request that you use the minimum value posssible for your application to be respectful of shared compute resources. 
 
-Situation and time fractions of `90%` have been found to be practical in real world applications using Meshtastic devices.
+Situation and time fractions of `90%` have been found to be practical in real world applications using LoRa devices.
