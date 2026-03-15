@@ -16,6 +16,8 @@ const useStore = defineStore('store', {
       currentMarker: undefined as undefined | L.Marker,
       localSites: [] as Site[], //useLocalStorage('localSites', ),
       simulationState: 'idle',
+      isAdmin: false,
+      adminToken: localStorage.getItem('adminToken') || '',
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
@@ -57,6 +59,47 @@ const useStore = defineStore('store', {
     }
   },
   actions: {
+    async login(password: string): Promise<boolean> {
+      try {
+        const response = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        if (!response.ok) return false;
+        const data = await response.json();
+        this.adminToken = data.token;
+        this.isAdmin = true;
+        localStorage.setItem('adminToken', this.adminToken);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    logout() {
+      this.adminToken = '';
+      this.isAdmin = false;
+      localStorage.removeItem('adminToken');
+    },
+    async checkAuth(): Promise<void> {
+      if (!this.adminToken) return;
+      try {
+        const response = await fetch('/auth/check', {
+          headers: { Authorization: `Bearer ${this.adminToken}` },
+        });
+        if (response.ok) {
+          this.isAdmin = true;
+        } else {
+          this.adminToken = '';
+          this.isAdmin = false;
+          localStorage.removeItem('adminToken');
+        }
+      } catch {
+        this.adminToken = '';
+        this.isAdmin = false;
+        localStorage.removeItem('adminToken');
+      }
+    },
     setTxCoords(lat: number, lon: number) {
       this.splatParams.transmitter.tx_lat = lat
       this.splatParams.transmitter.tx_lon = lon
@@ -163,6 +206,39 @@ const useStore = defineStore('store', {
       });
       this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site"); // Variable to hold the current marker
       this.redrawSites();
+      this.loadTowers();
+    },
+    async loadTowers() {
+      try {
+        const response = await fetch('/towers');
+        if (!response.ok) {
+          console.warn('Failed to load towers:', response.statusText);
+          return;
+        }
+        const towers = await response.json();
+        for (const tower of towers) {
+          // Skip towers already present in localSites (matched by taskId)
+          if (this.localSites.some((s: Site) => s.taskId === tower.task_id)) {
+            continue;
+          }
+          const site: Site = {
+            params: tower.params ?? {
+              transmitter: { name: tower.name ?? 'Unknown', tx_lat: tower.lat ?? 0, tx_lon: tower.lon ?? 0, tx_power: 0, tx_freq: 0, tx_height: 0, tx_gain: 0, tx_swr: 1 },
+              receiver: { rx_sensitivity: -130, rx_height: 1, rx_gain: 2, rx_loss: 2 },
+              environment: { radio_climate: 'continental_temperate', polarization: 'vertical', clutter_height: 1, ground_dielectric: 15, ground_conductivity: 0.005, atmosphere_bending: 301 },
+              simulation: { situation_fraction: 95, time_fraction: 95, simulation_extent: 30, high_resolution: false },
+              display: { color_scale: 'plasma', min_dbm: -130, max_dbm: -80, overlay_transparency: 50 },
+            },
+            taskId: tower.task_id ?? '',
+            raster: null,
+            layer: undefined,
+            visible: true,
+          };
+          this.localSites.push(site);
+        }
+      } catch (err) {
+        console.warn('Error loading towers:', err);
+      }
     },
     async runSimulation() {
       console.log('Simulation running...')
@@ -208,11 +284,16 @@ const useStore = defineStore('store', {
         this.simulationState = 'running';
 
         // Send the request to the backend's /predict endpoint
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (this.adminToken) {
+          headers["Authorization"] = `Bearer ${this.adminToken}`;
+        }
+
         const predictResponse = await fetch("/predict", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers,
           body: JSON.stringify(payload),
         });
 

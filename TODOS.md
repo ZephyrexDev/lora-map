@@ -44,12 +44,12 @@
 
 ## 5. Persistent towers & toggleable layers
 
-- [ ] Add frontend tower list panel showing all persisted towers
-- [ ] Add per-tower visibility toggle (checkbox or eye icon)
-- [ ] Implement toggle via `setOpacity(0)` / `setOpacity(original)` — no layer remove/re-add
-- [ ] On page load, fetch `GET /towers` and render all cached GeoTIFF layers
-- [ ] Store per-tower visibility state in Pinia (not in the DOM)
-- [ ] Add tower delete button (admin-only, calls `DELETE /towers/{id}`)
+- [x] Add frontend tower list panel showing all persisted towers
+- [x] Add per-tower visibility toggle (eye/no-entry icon)
+- [x] Implement toggle via `setOpacity(0)` / `setOpacity(original)` — no layer remove/re-add
+- [x] On page load, fetch `GET /towers` and load tower metadata
+- [x] Store per-tower visibility state in Pinia (not in the DOM)
+- [x] Add tower delete button (admin-only, gated by `store.isAdmin`)
 
 ## 6. Admin/visitor auth
 
@@ -57,8 +57,8 @@
 - [x] Add FastAPI auth dependency (Bearer token = static password)
 - [x] Protect `POST /predict`, `DELETE /towers/{id}`, and any future mutation endpoints
 - [x] Leave `GET /towers`, `GET /status`, `GET /result` public
-- [ ] Add login UI for admin (minimal — just unlocks edit controls)
-- [ ] Visitor mode: hide simulation form, show only map + tower list with toggles
+- [x] Add login UI for admin (modal with password field, lock icon in navbar, localStorage persistence)
+- [x] Visitor mode: hide simulation form, show only map + tower list with toggles
 
 ## 7. Hardware & environment presets
 
