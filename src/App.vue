@@ -234,6 +234,7 @@ import { useStore } from "./store.ts";
 const store = useStore();
 
 onMounted(() => {
+  store.initMap();
   void store.checkAuth();
 });
 const buttonText = () => {
@@ -241,9 +242,8 @@ const buttonText = () => {
     return "Running";
   } else if ("failed" === store.simulationState) {
     return "Failed";
-  } 
-    return "Run Simulation";
-  
+  }
+  return "Run Simulation";
 };
 </script>
 

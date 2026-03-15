@@ -365,7 +365,7 @@ onMounted(() => {
       trigger: "manual",
     });
   }
-  store.initMap();
+  // Map is initialized in App.vue onMounted, not here
 });
 
 onUnmounted(() => {
