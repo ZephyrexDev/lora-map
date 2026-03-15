@@ -110,7 +110,13 @@ vi.mock("leaflet-easyprint", () => ({}));
 // ---------------------------------------------------------------------------
 vi.stubGlobal(
   "fetch",
-  vi.fn(() => Promise.resolve({ ok: false, json: () => Promise.resolve({}), arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)) })),
+  vi.fn(() =>
+    Promise.resolve({
+      ok: false,
+      json: () => Promise.resolve({}),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    }),
+  ),
 );
 
 // ---------------------------------------------------------------------------

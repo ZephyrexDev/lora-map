@@ -72,9 +72,7 @@ describe("TowerList.vue", () => {
 
   it("shows eye emoji for visible site", () => {
     const store = useStore();
-    store.localSites = [
-      { params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true },
-    ];
+    store.localSites = [{ params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true }];
     const wrapper = mountTowerList();
     // Eye emoji: 👁️
     expect(wrapper.find("button.btn-outline-light").text()).toContain("👁️");
@@ -91,9 +89,7 @@ describe("TowerList.vue", () => {
 
   it("calls toggleSiteVisibility on eye button click", async () => {
     const store = useStore();
-    store.localSites = [
-      { params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true },
-    ];
+    store.localSites = [{ params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true }];
     store.toggleSiteVisibility = vi.fn();
     const wrapper = mountTowerList();
     await wrapper.find("button.btn-outline-light").trigger("click");
@@ -103,9 +99,7 @@ describe("TowerList.vue", () => {
   it("hides delete button for non-admin", () => {
     const store = useStore();
     store.isAdmin = false;
-    store.localSites = [
-      { params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true },
-    ];
+    store.localSites = [{ params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true }];
     const wrapper = mountTowerList();
     expect(wrapper.find("button.btn-outline-danger").exists()).toBe(false);
   });
@@ -113,9 +107,7 @@ describe("TowerList.vue", () => {
   it("shows delete button for admin", () => {
     const store = useStore();
     store.isAdmin = true;
-    store.localSites = [
-      { params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true },
-    ];
+    store.localSites = [{ params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true }];
     const wrapper = mountTowerList();
     expect(wrapper.find("button.btn-outline-danger").exists()).toBe(true);
   });
@@ -123,9 +115,7 @@ describe("TowerList.vue", () => {
   it("calls removeSite on delete button click", async () => {
     const store = useStore();
     store.isAdmin = true;
-    store.localSites = [
-      { params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true },
-    ];
+    store.localSites = [{ params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true }];
     store.removeSite = vi.fn();
     const wrapper = mountTowerList();
     await wrapper.find("button.btn-outline-danger").trigger("click");
@@ -134,9 +124,7 @@ describe("TowerList.vue", () => {
 
   it("hides mesh paths button when fewer than 2 towers", () => {
     const store = useStore();
-    store.localSites = [
-      { params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true },
-    ];
+    store.localSites = [{ params: makeSplatParams(), taskId: "t1", raster: {} as never, color: "#f00", visible: true }];
     const wrapper = mountTowerList();
     expect(wrapper.find("button.btn-outline-secondary, button.btn-outline-info").exists()).toBe(false);
   });

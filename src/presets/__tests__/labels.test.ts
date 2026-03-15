@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  HARDWARE_LABELS,
-  ANTENNA_LABELS,
-  TERRAIN_LABELS,
-  labelsToOptions,
-} from "../labels";
+import { HARDWARE_LABELS, ANTENNA_LABELS, TERRAIN_LABELS, labelsToOptions } from "../labels";
 
 describe("HARDWARE_LABELS", () => {
   it("includes Heltec V3 and V4", () => {

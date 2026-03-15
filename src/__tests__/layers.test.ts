@@ -12,7 +12,7 @@ describe("redPinMarker", () => {
   });
 
   it("contains pin emoji in HTML", () => {
-    const html = (redPinMarker.options).html as string;
+    const html = redPinMarker.options.html as string;
     expect(html).toContain("📍");
   });
 });
