@@ -9,6 +9,12 @@ export default defineConfig({
       '/predict': 'http://localhost:8080/',
       '/status': 'http://localhost:8080/',
       '/result': 'http://localhost:8080/',
+      '/towers': 'http://localhost:8080/',
+      '/tower-paths': 'http://localhost:8080/',
+      '/deadzones': 'http://localhost:8080/',
+      '/auth': 'http://localhost:8080/',
+      '/matrix': 'http://localhost:8080/',
+      '/simulations': 'http://localhost:8080/',
     },
   },
   build: {

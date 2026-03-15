@@ -44,3 +44,6 @@ dist-ssr
 app/ui/assets/*.css
 app/ui/assets/*.js
 .claude/
+test-results/
+playwright-report/
+blob-report/
