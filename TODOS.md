@@ -155,24 +155,24 @@ Where multiple towers overlap, the area uses cross-hatched line shading — each
 Toggleable overlay that analyzes gaps in the combined coverage of all towers and highlights deadzones. Rendered as a **white dotted pattern** with transparency proportional to deadzone severity: areas with zero coverage from any tower are **80% opaque** (strong white dots), areas with weak partial coverage fade toward fully transparent. Requires at least 2 existing towers with completed simulations.
 
 ### Analysis
-- [ ] Compute a "coverage gap" raster from all active tower simulations: for each pixel, record the best signal from any tower (or no-coverage if below threshold everywhere)
-- [ ] Identify contiguous deadzone regions (connected components of no-coverage pixels within the simulation extent)
-- [ ] Score each deadzone by area and proximity to existing coverage edges — large gaps adjacent to near-threshold signal are highest priority (a new tower there extends the network most efficiently)
-- [ ] Filter out deadzones that are too small (noise) or too far from any existing coverage (unreachable by a single new tower)
+- [x] Compute a "coverage gap" raster from all active tower simulations: for each pixel, record the best signal from any tower (or no-coverage if below threshold everywhere)
+- [x] Identify contiguous deadzone regions (connected components of no-coverage pixels within the simulation extent)
+- [x] Score each deadzone by area and proximity to existing coverage edges — large gaps adjacent to near-threshold signal are highest priority (a new tower there extends the network most efficiently)
+- [x] Filter out deadzones that are too small (noise) or too far from any existing coverage (unreachable by a single new tower)
 
 ### Rendering
-- [ ] Render deadzones as white dotted/stippled pattern on a canvas overlay layer
-- [ ] Transparency scales with deadzone severity: complete deadzone (no signal from any tower) = 80% opaque white dots (alpha ≈ 204), near-threshold weak signal = nearly transparent, above-threshold coverage = fully transparent (no dots)
+- [x] Render deadzones as white dotted/stippled pattern on a canvas overlay layer
+- [x] Transparency scales with deadzone severity: complete deadzone (no signal from any tower) = 80% opaque white dots (alpha ≈ 204), near-threshold weak signal = nearly transparent, above-threshold coverage = fully transparent (no dots)
 - [ ] Dot density or size can optionally scale with severity for additional visual weight in the worst gaps
 
 ### Suggestion markers
-- [ ] For candidate points within or adjacent to deadzones, estimate how much deadzone area a new tower at that point would cover (based on terrain LOS from that point, using a simplified or cached SPLAT! model)
-- [ ] Show top-N suggested sites as numbered markers with estimated coverage gain (e.g., "~12 km² new coverage")
+- [x] For candidate points within or adjacent to deadzones, estimate how much deadzone area a new tower at that point would cover (based on terrain LOS from that point, using a simplified or cached SPLAT! model)
+- [x] Show top-N suggested sites as numbered markers with estimated coverage gain (e.g., "~12 km² new coverage")
 
 ### UI
-- [ ] Add toggle in display settings: "Show deadzone remediation" (disabled until ≥2 towers exist)
+- [x] Add toggle in display settings: "Show deadzone remediation" (disabled until ≥2 towers exist)
 - [ ] Clicking a suggestion marker opens a popup with: estimated new coverage area, terrain summary, option to pre-fill the transmitter form with that location's coordinates
-- [ ] Recompute suggestions when towers are added, removed, or simulations complete
+- [x] Recompute suggestions when towers are added, removed, or simulations complete
 
 ## 13. Multi-source terrain data pipeline
 
@@ -184,18 +184,18 @@ Support three terrain elevation sources that feed into SPLAT! via the existing t
 - [x] Convert to SPLAT! `.sdf` via `srtm2sdf`
 
 ### DSM (Digital Surface Model)
-- [ ] Add DSM tile source support: USGS 3DEP (US), Copernicus GLO-30 DSM (global 30m, free via AWS/OpenData), provincial LiDAR (Canada)
-- [ ] DSM tiles include buildings and tree canopy as elevation — SPLAT! treats them as terrain that blocks signals
-- [ ] Implement DSM tile downloader with same cache pattern as SRTM (`diskcache` keyed by `dsm:{tile_name}`)
-- [ ] Fall back to bare-earth SRTM for tiles where DSM data is unavailable
-- [ ] Convert DSM `.hgt` to `.sdf` using same `srtm2sdf` pipeline
+- [x] Add DSM tile source support: Copernicus GLO-30 DSM (global 30m, free via AWS/OpenData)
+- [x] DSM tiles include buildings and tree canopy as elevation — SPLAT! treats them as terrain that blocks signals
+- [x] Implement DSM tile downloader with same cache pattern as SRTM (`diskcache` keyed by `dsm:{tile_name}`)
+- [x] Fall back to bare-earth SRTM for tiles where DSM data is unavailable
+- [x] Convert DSM `.hgt` to `.sdf` using same `srtm2sdf` pipeline
 
 ### LULC-burned clutter
-- [ ] Download ESA WorldCover tiles (10m GeoTIFF, global, free) — classify each pixel as tree cover, shrubland, grassland, cropland, built-up, bare/sparse, water, wetland, etc.
-- [ ] Define clutter height lookup table per land cover class (e.g., tree cover=12m, built-up=20m, shrubland=3m, cropland=0m, water=0m)
-- [ ] In tile preprocessing: load SRTM bare-earth tile + co-located WorldCover tile, resample WorldCover to match SRTM grid, add per-pixel clutter height to elevation values
-- [ ] Cache the burned tiles separately (`lulc:{tile_name}`) so bare-earth originals remain available
-- [ ] Convert burned `.hgt` to `.sdf` using same `srtm2sdf` pipeline
+- [x] Download ESA WorldCover tiles (10m GeoTIFF, global, free) — classify each pixel as tree cover, shrubland, grassland, cropland, built-up, bare/sparse, water, wetland, etc.
+- [x] Define clutter height lookup table per land cover class (e.g., tree cover=12m, built-up=20m, shrubland=3m, cropland=0m, water=0m)
+- [x] In tile preprocessing: load SRTM bare-earth tile + co-located WorldCover tile, resample WorldCover to match SRTM grid, add per-pixel clutter height to elevation values
+- [x] Cache the burned tiles separately (`lulc:{tile_name}`) so bare-earth originals remain available
+- [x] Convert burned `.hgt` to `.sdf` using same `srtm2sdf` pipeline
 
 ### Weighted Aggregate mode
 A fourth virtual terrain model that blends the three real models into a single composite prediction. No additional SPLAT! run — it's a weighted pixel-level blend of the three existing simulation results.
@@ -204,20 +204,20 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Requires all three base terrain simulations to be completed for the tower+client combination; skip pixels where any source has no data
 - [x] Generate the aggregate as a derived GeoTIFF (or compute on-the-fly in the frontend `pixelValuesToColorFn` if all three rasters are loaded)
 - [x] Rationale: bare-earth is optimistic (no obstructions), DSM and LULC each capture different real-world blockage — weighting them equally at 40% each gives a practical "expected real-world" estimate while the 20% bare-earth component prevents over-pessimism in areas where DSM/LULC data is noisy
-- [ ] Add `"weighted_aggregate"` as a terrain model option in the visitor UI selector (only available when all three base models are cached)
+- [x] Add `"weighted_aggregate"` as a terrain model option in the visitor UI selector (only available when all three base models are cached)
 
 ### Terrain model selection
-- [ ] Add `terrain_model` field to `CoveragePredictionRequest`: `"bare_earth"` (default), `"dsm"`, `"lulc_clutter"`
-- [ ] Route tile download/preprocessing through the selected model in `coverage_prediction()`
-- [ ] Store terrain model used alongside each simulation result in SQLite
+- [x] Add `terrain_model` field to `CoveragePredictionRequest`: `"bare_earth"` (default), `"dsm"`, `"lulc_clutter"`
+- [x] Route tile download/preprocessing through the selected model in `coverage_prediction()`
+- [x] Store terrain model used alongside each simulation result in SQLite (simulations table has terrain_model column)
 - [x] `"weighted_aggregate"` is computed from cached results, not a separate SPLAT! run
 
 ## 14. Meshcore tower path simulation
 
-- [ ] Add SPLAT! point-to-point analysis function in `app/services/splat.py`
-- [ ] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers
-- [ ] Store path results (path loss, LOS status) in SQLite `tower_paths` table
-- [ ] Add `GET /tower-paths` endpoint returning all computed paths
+- [x] Add SPLAT! point-to-point analysis function in `app/services/splat.py`
+- [x] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers
+- [x] Store path results (path loss, LOS status) in SQLite `tower_paths` table
+- [x] Add `GET /tower-paths` endpoint returning all computed paths
 - [ ] Render paths as Leaflet polylines between tower markers (color-coded by path quality)
 - [ ] Add toggle to show/hide mesh path overlay independently from coverage layers
-- [ ] Recalculate affected paths when a tower is added or removed
+- [x] Recalculate affected paths when a tower is added or removed
