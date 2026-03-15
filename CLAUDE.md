@@ -39,7 +39,8 @@ compose.yml         → Optional podman-compose for dev convenience
 - **Storage:** SQLite (tower data, simulation results, GeoTIFF blobs)
 - **Data/Geo:** Rasterio, GDAL, NumPy, Matplotlib, Haversine, Boto3 (AWS S3 terrain tiles)
 - **Infra:** Podman (single container), sits behind an external HTTPS-terminating reverse proxy
-- **Package manager:** pnpm (frontend), pip (backend)
+- **Testing:** Vitest (frontend), pytest (backend), GitHub Actions CI
+- **Package manager:** pnpm (frontend), uv (backend)
 
 ## Commands
 
@@ -50,8 +51,12 @@ pnpm run dev              # Vite dev server
 pnpm run build            # Type-check + build + copy to app/ui
 
 # Backend
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8080
+uv sync                   # Install Python dependencies from pyproject.toml
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8080
+
+# Testing
+pnpm run test             # Frontend tests (Vitest)
+uv run pytest -v          # Backend tests (pytest)
 
 # Container
 podman build -f Containerfile -t lora-planner .
