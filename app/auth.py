@@ -12,6 +12,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
+from app.models.responses import AuthCheckResponse, AuthTokenResponse
+
 ADMIN_PASSWORD: str | None = os.environ.get("ADMIN_PASSWORD")
 
 # Simple in-memory rate limiter for login attempts
@@ -73,8 +75,8 @@ class LoginRequest(BaseModel):
     password: str
 
 
-@router.post("/login")
-async def login(body: LoginRequest, request: Request) -> dict[str, str]:
+@router.post("/login", response_model=AuthTokenResponse)
+async def login(body: LoginRequest, request: Request) -> AuthTokenResponse:
     """Validate a password and return a token on success.
 
     Returns ``{"token": "<password>"}`` when the password matches
@@ -83,23 +85,23 @@ async def login(body: LoginRequest, request: Request) -> dict[str, str]:
     is returned.  Rate limited to 5 attempts per minute per IP.
     """
     if ADMIN_PASSWORD is None:
-        return {"token": ""}
+        return AuthTokenResponse(token="")
 
     _check_rate_limit(request.client.host if request.client else "unknown")
 
     if body.password != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Invalid password")
 
-    return {"token": body.password}
+    return AuthTokenResponse(token=body.password)
 
 
-@router.get("/check")
+@router.get("/check", response_model=AuthCheckResponse)
 async def check(
     _: Annotated[None, Depends(require_admin)] = None,
-) -> dict[str, bool]:
+) -> AuthCheckResponse:
     """Return ``{"authenticated": true}`` if the Bearer token is valid.
 
     Reuses the ``require_admin`` dependency so it returns 401 when the token
     is missing or wrong (and auth is enabled).
     """
-    return {"authenticated": True}
+    return AuthCheckResponse(authenticated=True)

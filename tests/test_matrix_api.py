@@ -2,26 +2,27 @@
 
 from app.db import db_connection
 from app.matrix import DEFAULT_MATRIX_CONFIG, set_matrix_config
+from app.models.MatrixConfigRequest import MatrixConfigRequest
 
 
 class TestGetMatrixConfig:
     def test_returns_default_config(self, client):
         resp = client.get("/matrix/config")
         assert resp.status_code == 200
-        assert resp.json() == DEFAULT_MATRIX_CONFIG
+        assert resp.json() == DEFAULT_MATRIX_CONFIG.model_dump()
 
     def test_returns_updated_config_after_put(self, client):
-        custom = {
-            "hardware": ["v3"],
-            "antennas": ["bingfu_whip"],
-            "terrain": ["bare_earth"],
-        }
+        custom = MatrixConfigRequest(
+            hardware=["v3"],
+            antennas=["bingfu_whip"],
+            terrain=["bare_earth"],
+        )
         with db_connection() as conn:
             set_matrix_config(conn, custom)
 
         resp = client.get("/matrix/config")
         assert resp.status_code == 200
-        assert resp.json() == custom
+        assert resp.json() == custom.model_dump()
 
 
 class TestPutMatrixConfig:

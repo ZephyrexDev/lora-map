@@ -6,6 +6,7 @@ deadzone regions via connected-component labeling, scores them by area and proxi
 to existing coverage edges, and generates up to 5 candidate tower site suggestions.
 """
 
+import contextlib
 import logging
 import math
 
@@ -49,15 +50,11 @@ class DeadzoneAnalyzer:
     def _cleanup_rasters(self, rasters: list[rasterio.DatasetReader]) -> None:
         """Close all open dataset readers and their backing MemoryFile objects."""
         for reader in rasters:
-            try:
+            with contextlib.suppress(Exception):
                 reader.close()
-            except Exception:
-                pass
         for mem_file in self._memory_files:
-            try:
+            with contextlib.suppress(Exception):
                 mem_file.close()
-            except Exception:
-                pass
         self._memory_files.clear()
 
     def analyze(self) -> DeadzoneAnalysisResponse:

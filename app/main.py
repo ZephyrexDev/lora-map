@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import sqlite3
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
@@ -29,6 +30,9 @@ from app.db.connection import DEFAULT_DB_PATH
 from app.matrix import (
     ANTENNA_RX_PARAMS,
     HARDWARE_RX_PARAMS,
+    KNOWN_ANTENNAS,
+    KNOWN_HARDWARE,
+    KNOWN_TERRAIN,
     get_matrix_combinations,
     get_matrix_config,
     set_matrix_config,
@@ -36,6 +40,20 @@ from app.matrix import (
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.models.DeadzoneResponse import DeadzoneAnalysisResponse
 from app.models.MatrixConfigRequest import MatrixConfigRequest
+from app.models.responses import (
+    ComputePathsResponse,
+    CreatedPathResponse,
+    DeleteResponse,
+    PredictResponse,
+    SimulationListResponse,
+    SimulationResponse,
+    TaskStatusResponse,
+    TowerListResponse,
+    TowerLocation,
+    TowerPathListResponse,
+    TowerPathResponse,
+    TowerResponse,
+)
 from app.models.TowerPathsRequest import TowerPathsRequest
 from app.services.aggregate import compute_weighted_aggregate
 from app.services.deadzone import DeadzoneAnalyzer
@@ -85,7 +103,7 @@ def _geotiff_response_or_status(
     return JSONResponse({"id": resource_id, "status": status})
 
 
-def _delete_row(table: str, id_column: str, row_id: str, label: str) -> JSONResponse:
+def _delete_row(table: str, id_column: str, row_id: str, label: str) -> DeleteResponse | JSONResponse:
     """Delete a row by ID, returning 404 if not found."""
     with db_connection() as conn:
         cursor = conn.execute(f"DELETE FROM {table} WHERE {id_column} = ?", (row_id,))  # noqa: S608
@@ -93,13 +111,13 @@ def _delete_row(table: str, id_column: str, row_id: str, label: str) -> JSONResp
     if cursor.rowcount == 0:
         return JSONResponse({"error": f"{label} not found"}, status_code=404)
     logger.info("%s %s deleted.", label, row_id)
-    return JSONResponse({"message": f"{label} deleted", "id": row_id})
+    return DeleteResponse(message=f"{label} deleted", id=row_id)
 
 
 def _run_simulation_task(
-    run_fn: callable,
-    on_success: callable,
-    on_failure: callable,
+    run_fn: Callable[[], bytes],
+    on_success: Callable[[bytes], None],
+    on_failure: Callable[[str], None],
     label: str,
 ) -> None:
     """Execute a simulation function with standardized success/failure DB updates."""
@@ -111,6 +129,20 @@ def _run_simulation_task(
         on_failure(str(e))
 
 
+def _get_tower_location(conn: sqlite3.Connection, tower_id: str) -> TowerLocation | None:
+    """Return location fields for a tower, or None if not found."""
+    row = conn.execute("SELECT params FROM towers WHERE id = ?", (tower_id,)).fetchone()
+    if row is None:
+        return None
+    params = json.loads(row["params"])
+    return TowerLocation(
+        lat=params.get("lat", 0),
+        lon=params.get("lon", 0),
+        tx_height=params.get("tx_height", 1),
+        frequency_mhz=params.get("frequency_mhz", 905.0),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Background tasks
 # ---------------------------------------------------------------------------
@@ -119,11 +151,11 @@ def _run_simulation_task(
 def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -> None:
     """Execute the SPLAT! coverage prediction and persist results to SQLite."""
 
-    def execute():
+    def execute() -> bytes:
         logger.info("Starting SPLAT! coverage prediction for task %s.", task_id)
         return splat_service.coverage_prediction(request)
 
-    def on_success(geotiff_data: bytes):
+    def on_success(geotiff_data: bytes) -> None:
         with db_connection() as conn:
             now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             conn.execute("UPDATE towers SET geotiff = ?, updated_at = ? WHERE id = ?", (geotiff_data, now, tower_id))
@@ -131,7 +163,7 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
             conn.commit()
         logger.info("Task %s completed successfully.", task_id)
 
-    def on_failure(error_msg: str):
+    def on_failure(error_msg: str) -> None:
         with db_connection() as conn:
             conn.execute("UPDATE tasks SET status = 'failed', error = ? WHERE id = ?", (error_msg, task_id))
             conn.commit()
@@ -155,7 +187,7 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
     for row in rows:
         sim_id = row["id"]
 
-        def execute(r=row):
+        def execute(r=row) -> bytes:
             overrides: dict[str, Any] = {"terrain_model": r["terrain_model"]}
             hw_params = HARDWARE_RX_PARAMS.get(r["client_hardware"], {})
             ant_params = ANTENNA_RX_PARAMS.get(r["client_antenna"], {})
@@ -167,7 +199,7 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
                 overrides["swr"] = ant_params["swr"]
             return splat_service.coverage_prediction(payload.model_copy(update=overrides))
 
-        def on_success(geotiff_data: bytes, sid=sim_id):
+        def on_success(geotiff_data: bytes, sid: str = sim_id) -> None:
             with db_connection() as conn:
                 conn.execute(
                     "UPDATE simulations SET geotiff = ?, status = 'completed' WHERE id = ?", (geotiff_data, sid)
@@ -175,7 +207,7 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
                 conn.commit()
             logger.info("Simulation %s completed.", sid)
 
-        def on_failure(error_msg: str, sid=sim_id):
+        def on_failure(error_msg: str, sid: str = sim_id) -> None:
             with db_connection() as conn:
                 conn.execute("UPDATE simulations SET status = 'failed', error = ? WHERE id = ?", (error_msg, sid))
                 conn.commit()
@@ -183,16 +215,58 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
         _run_simulation_task(execute, on_success, on_failure, f"Simulation {sim_id}")
 
 
+def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> None:
+    """Run SPLAT! P2P analysis between two towers and store the result."""
+    try:
+        with db_connection() as conn:
+            loc_a = _get_tower_location(conn, tower_a_id)
+            loc_b = _get_tower_location(conn, tower_b_id)
+
+        if loc_a is None or loc_b is None:
+            logger.warning("Tower not found for path %s, skipping.", path_id)
+            return
+
+        result = splat_service.point_to_point(
+            lat_a=loc_a.lat,
+            lon_a=loc_a.lon,
+            height_a=loc_a.tx_height,
+            lat_b=loc_b.lat,
+            lon_b=loc_b.lon,
+            height_b=loc_b.tx_height,
+            frequency_mhz=loc_a.frequency_mhz,
+        )
+
+        with db_connection() as conn:
+            conn.execute(
+                "UPDATE tower_paths SET path_loss_db = ?, has_los = ?, distance_km = ? WHERE id = ?",
+                (result.path_loss_db, int(result.has_los), result.distance_km, path_id),
+            )
+            conn.commit()
+            logger.info(
+                "Tower path %s completed: loss=%.1f dB, LOS=%s, dist=%.1f km",
+                path_id,
+                result.path_loss_db,
+                result.has_los,
+                result.distance_km,
+            )
+
+    except Exception as e:
+        logger.error("Tower path %s failed: %s", path_id, e)
+        with db_connection() as conn:
+            conn.execute("DELETE FROM tower_paths WHERE id = ?", (path_id,))
+            conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Prediction endpoints
 # ---------------------------------------------------------------------------
 
 
-@app.post("/predict", dependencies=[Depends(require_admin)], status_code=201)
+@app.post("/predict", dependencies=[Depends(require_admin)], status_code=201, response_model=PredictResponse)
 async def predict(
     payload: CoveragePredictionRequest,
     background_tasks: BackgroundTasks,
-) -> JSONResponse:
+) -> PredictResponse:
     """Submit a signal coverage prediction request.
 
     Creates a tower and task, queues the SPLAT! computation as a background task.
@@ -216,7 +290,6 @@ async def predict(
             (task_id, tower_id, "processing"),
         )
 
-        # Create simulation rows for each matrix combination
         config = get_matrix_config(conn)
         combinations = get_matrix_combinations(config)
         for combo in combinations:
@@ -227,12 +300,9 @@ async def predict(
                 (sim_id, tower_id, combo["hardware"], combo["antenna"], combo["terrain"]),
             )
 
-        # Gather existing tower IDs for auto-path computation
         existing_tower_ids: list[str] = [
             r["id"] for r in conn.execute("SELECT id FROM towers WHERE id != ?", (tower_id,)).fetchall()
         ]
-
-        # Create path rows for pairwise analysis with existing towers
         for other_id in existing_tower_ids:
             path_id = str(uuid4())
             conn.execute(
@@ -242,13 +312,11 @@ async def predict(
 
         conn.commit()
 
-    # Invalidate deadzone cache since tower set changed
     _deadzone_cache["result"] = None
 
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
     background_tasks.add_task(run_matrix_simulations, tower_id, payload)
 
-    # Queue path analysis for the new tower against all existing towers
     with db_connection() as conn:
         new_paths = conn.execute(
             "SELECT id, tower_a_id, tower_b_id FROM tower_paths WHERE tower_a_id = ? OR tower_b_id = ?",
@@ -259,11 +327,11 @@ async def predict(
             run_tower_path_analysis, path_row["tower_a_id"], path_row["tower_b_id"], path_row["id"]
         )
 
-    return JSONResponse({"task_id": task_id, "tower_id": tower_id}, status_code=201)
+    return PredictResponse(task_id=task_id, tower_id=tower_id)
 
 
-@app.get("/status/{task_id}")
-async def get_status(task_id: str) -> JSONResponse:
+@app.get("/status/{task_id}", response_model=TaskStatusResponse)
+async def get_status(task_id: str) -> TaskStatusResponse | JSONResponse:
     """Retrieve the status of a prediction task from SQLite."""
     with db_connection() as conn:
         row = conn.execute("SELECT status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -271,11 +339,11 @@ async def get_status(task_id: str) -> JSONResponse:
     if row is None:
         return JSONResponse({"error": "Task not found"}, status_code=404)
 
-    response: dict[str, Any] = {"task_id": task_id, "status": row["status"]}
-    if row["status"] == "failed" and row["error"]:
-        response["error"] = row["error"]
-
-    return JSONResponse(response)
+    return TaskStatusResponse(
+        task_id=task_id,
+        status=row["status"],
+        error=row["error"] if row["status"] == "failed" else None,
+    )
 
 
 @app.get("/result/{task_id}", response_model=None)
@@ -299,31 +367,31 @@ async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
 # ---------------------------------------------------------------------------
 
 
-@app.get("/towers")
-async def list_towers() -> JSONResponse:
+@app.get("/towers", response_model=TowerListResponse)
+async def list_towers() -> TowerListResponse:
     """List all towers without their GeoTIFF blobs."""
     with db_connection() as conn:
         rows = conn.execute("SELECT id, name, color, params, created_at, updated_at FROM towers").fetchall()
 
-    towers: list[dict[str, Any]] = [
-        {
-            "id": row["id"],
-            "name": row["name"],
-            "color": row["color"],
-            "params": json.loads(row["params"]),
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
+    towers = [
+        TowerResponse(
+            id=row["id"],
+            name=row["name"],
+            color=row["color"],
+            params=json.loads(row["params"]),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
         for row in rows
     ]
-    return JSONResponse({"towers": towers})
+    return TowerListResponse(towers=towers)
 
 
 @app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)])
-async def delete_tower(tower_id: str) -> JSONResponse:
+async def delete_tower(tower_id: str) -> DeleteResponse | JSONResponse:
     """Delete a tower and its associated tasks (via CASCADE)."""
     result = _delete_row("towers", "id", tower_id, "Tower")
-    if result.status_code == 200:
+    if isinstance(result, DeleteResponse):
         _deadzone_cache["result"] = None
     return result
 
@@ -333,11 +401,11 @@ async def delete_tower(tower_id: str) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 
-@app.get("/towers/{tower_id}/simulations")
+@app.get("/towers/{tower_id}/simulations", response_model=SimulationListResponse)
 async def list_tower_simulations(
     tower_id: str,
     enabled_only: bool = Query(False, description="Filter to only simulations matching enabled matrix config members"),
-) -> JSONResponse:
+) -> SimulationListResponse:
     """Return all simulations for a tower (without GeoTIFF blobs)."""
     with db_connection() as conn:
         rows = conn.execute(
@@ -348,9 +416,9 @@ async def list_tower_simulations(
 
         if enabled_only:
             config = get_matrix_config(conn)
-            enabled_hw = set(config.get("hardware", []))
-            enabled_ant = set(config.get("antennas", []))
-            enabled_ter = set(config.get("terrain", []))
+            enabled_hw = set(config.hardware)
+            enabled_ant = set(config.antennas)
+            enabled_ter = set(config.terrain)
             rows = [
                 r
                 for r in rows
@@ -360,17 +428,17 @@ async def list_tower_simulations(
             ]
 
     simulations = [
-        {
-            "id": row["id"],
-            "client_hardware": row["client_hardware"],
-            "client_antenna": row["client_antenna"],
-            "terrain_model": row["terrain_model"],
-            "status": row["status"],
-            "created_at": row["created_at"],
-        }
+        SimulationResponse(
+            id=row["id"],
+            client_hardware=row["client_hardware"],
+            client_antenna=row["client_antenna"],
+            terrain_model=row["terrain_model"],
+            status=row["status"],
+            created_at=row["created_at"],
+        )
         for row in rows
     ]
-    return JSONResponse({"simulations": simulations})
+    return SimulationListResponse(simulations=simulations)
 
 
 @app.get("/simulations/{sim_id}/result", response_model=None)
@@ -394,11 +462,7 @@ async def get_aggregate_simulation(
     client_hardware: str = Query(..., description="Client hardware key"),
     client_antenna: str = Query(..., description="Client antenna key"),
 ) -> JSONResponse | StreamingResponse:
-    """Return a weighted-aggregate GeoTIFF blending bare_earth, DSM, and LULC results.
-
-    Requires all three base terrain simulations to be completed for the given
-    tower + client hardware + client antenna combination.
-    """
+    """Return a weighted-aggregate GeoTIFF blending bare_earth, DSM, and LULC results."""
     base_models = ("bare_earth", "dsm", "lulc_clutter")
     blobs: dict[str, bytes] = {}
     missing: list[str] = []
@@ -443,38 +507,25 @@ async def get_aggregate_simulation(
 # Matrix config endpoints
 # ---------------------------------------------------------------------------
 
-# Known valid values for matrix axes (used for validation on PUT).
-_KNOWN_HARDWARE = {"v3", "v4", "custom"}
-_KNOWN_ANTENNAS = {
-    "ribbed_spring_helical",
-    "duck_stubby",
-    "bingfu_whip",
-    "slinkdsco_omni",
-}
-_KNOWN_TERRAIN = {"bare_earth", "dsm", "lulc_clutter", "weighted_aggregate"}
 
-
-@app.get("/matrix/config")
-async def get_matrix_config_endpoint() -> JSONResponse:
+@app.get("/matrix/config", response_model=MatrixConfigRequest)
+async def get_matrix_config_endpoint() -> MatrixConfigRequest:
     """Return the current matrix configuration."""
     with db_connection() as conn:
-        config = get_matrix_config(conn)
-    return JSONResponse(config)
+        return get_matrix_config(conn)
 
 
-@app.put("/matrix/config", dependencies=[Depends(require_admin)])
-async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> JSONResponse:
+@app.put("/matrix/config", dependencies=[Depends(require_admin)], response_model=MatrixConfigRequest)
+async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> MatrixConfigRequest | JSONResponse:
     """Update the matrix configuration (admin-only).
 
-    Accepts a JSON body with keys ``hardware``, ``antennas``, and ``terrain``,
-    each mapping to a list of string identifiers.  All values must be from
-    the known presets.
+    All values must be from the known presets.
     """
     errors: list[str] = []
     for key, known in [
-        ("hardware", _KNOWN_HARDWARE),
-        ("antennas", _KNOWN_ANTENNAS),
-        ("terrain", _KNOWN_TERRAIN),
+        ("hardware", KNOWN_HARDWARE),
+        ("antennas", KNOWN_ANTENNAS),
+        ("terrain", KNOWN_TERRAIN),
     ]:
         values = getattr(body, key)
         unknown = set(values) - known
@@ -484,12 +535,10 @@ async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> JSONResponse:
     if errors:
         return JSONResponse({"errors": errors}, status_code=422)
 
-    config = {"hardware": body.hardware, "antennas": body.antennas, "terrain": body.terrain}
-
     with db_connection() as conn:
-        set_matrix_config(conn, config)
+        set_matrix_config(conn, body)
 
-    return JSONResponse(config)
+    return body
 
 
 # ---------------------------------------------------------------------------
@@ -497,74 +546,12 @@ async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 
-def _get_tower_location(conn: sqlite3.Connection, tower_id: str) -> dict[str, Any] | None:
-    """Return lat, lon, and tx_height for a tower, or None if not found."""
-    row = conn.execute("SELECT params FROM towers WHERE id = ?", (tower_id,)).fetchone()
-    if row is None:
-        return None
-    params = json.loads(row["params"])
-    return {
-        "lat": params.get("lat", 0),
-        "lon": params.get("lon", 0),
-        "tx_height": params.get("tx_height", 1),
-        "frequency_mhz": params.get("frequency_mhz", 905.0),
-    }
-
-
-def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> None:
-    """Run SPLAT! P2P analysis between two towers and store the result."""
-    try:
-        with db_connection() as conn:
-            loc_a = _get_tower_location(conn, tower_a_id)
-            loc_b = _get_tower_location(conn, tower_b_id)
-
-        if loc_a is None or loc_b is None:
-            logger.warning("Tower not found for path %s, skipping.", path_id)
-            return
-
-        result = splat_service.point_to_point(
-            lat_a=loc_a["lat"],
-            lon_a=loc_a["lon"],
-            height_a=loc_a["tx_height"],
-            lat_b=loc_b["lat"],
-            lon_b=loc_b["lon"],
-            height_b=loc_b["tx_height"],
-            frequency_mhz=loc_a["frequency_mhz"],
-        )
-
-        with db_connection() as conn:
-            conn.execute(
-                "UPDATE tower_paths SET path_loss_db = ?, has_los = ?, distance_km = ? WHERE id = ?",
-                (result.path_loss_db, int(result.has_los), result.distance_km, path_id),
-            )
-            conn.commit()
-            logger.info(
-                "Tower path %s completed: loss=%.1f dB, LOS=%s, dist=%.1f km",
-                path_id,
-                result.path_loss_db,
-                result.has_los,
-                result.distance_km,
-            )
-
-    except Exception as e:
-        logger.error("Tower path %s failed: %s", path_id, e)
-        with db_connection() as conn:
-            conn.execute("DELETE FROM tower_paths WHERE id = ?", (path_id,))
-            conn.commit()
-
-
-@app.post("/tower-paths", dependencies=[Depends(require_admin)], status_code=202)
+@app.post("/tower-paths", dependencies=[Depends(require_admin)], status_code=202, response_model=ComputePathsResponse)
 async def compute_tower_paths(
     background_tasks: BackgroundTasks,
     body: TowerPathsRequest | None = None,
-) -> JSONResponse:
-    """Compute pairwise P2P paths between towers (async — returns 202 Accepted).
-
-    Optionally accepts ``{"tower_ids": ["id1", "id2", ...]}`` to limit
-    which towers are included. If omitted, all towers are used.
-
-    Existing paths between the selected towers are replaced.
-    """
+) -> ComputePathsResponse | JSONResponse:
+    """Compute pairwise P2P paths between towers (async — returns 202 Accepted)."""
     with db_connection() as conn:
         if body and body.tower_ids:
             tower_ids: list[str] = body.tower_ids
@@ -575,15 +562,13 @@ async def compute_tower_paths(
         if len(tower_ids) < 2:
             return JSONResponse({"error": "Need at least 2 towers for path analysis"}, status_code=400)
 
-        # Generate all unique pairs (order-independent)
         pairs: list[tuple[str, str]] = []
         for i, a in enumerate(tower_ids):
             for b in tower_ids[i + 1 :]:
                 pairs.append((a, b))
 
-        created_paths: list[dict[str, str]] = []
+        created_paths: list[CreatedPathResponse] = []
         for tower_a_id, tower_b_id in pairs:
-            # Delete existing path between these two towers (either direction)
             conn.execute(
                 "DELETE FROM tower_paths WHERE "
                 "(tower_a_id = ? AND tower_b_id = ?) OR (tower_a_id = ? AND tower_b_id = ?)",
@@ -595,16 +580,16 @@ async def compute_tower_paths(
                 "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES (?, ?, ?)",
                 (path_id, tower_a_id, tower_b_id),
             )
-            created_paths.append({"id": path_id, "tower_a_id": tower_a_id, "tower_b_id": tower_b_id})
+            created_paths.append(CreatedPathResponse(id=path_id, tower_a_id=tower_a_id, tower_b_id=tower_b_id))
             background_tasks.add_task(run_tower_path_analysis, tower_a_id, tower_b_id, path_id)
 
         conn.commit()
 
-    return JSONResponse({"paths": created_paths, "count": len(created_paths)}, status_code=202)
+    return ComputePathsResponse(paths=created_paths, count=len(created_paths))
 
 
-@app.get("/tower-paths")
-async def list_tower_paths() -> JSONResponse:
+@app.get("/tower-paths", response_model=TowerPathListResponse)
+async def list_tower_paths() -> TowerPathListResponse:
     """Return all computed tower paths (public endpoint for visitors)."""
     with db_connection() as conn:
         rows = conn.execute(
@@ -615,31 +600,27 @@ async def list_tower_paths() -> JSONResponse:
             "JOIN towers tb ON tb.id = tp.tower_b_id"
         ).fetchall()
 
-    paths: list[dict[str, Any]] = []
-    for row in rows:
-        params_a = json.loads(row["params_a"])
-        params_b = json.loads(row["params_b"])
-        paths.append(
-            {
-                "id": row["id"],
-                "tower_a_id": row["tower_a_id"],
-                "tower_b_id": row["tower_b_id"],
-                "lat_a": params_a.get("lat", 0),
-                "lon_a": params_a.get("lon", 0),
-                "lat_b": params_b.get("lat", 0),
-                "lon_b": params_b.get("lon", 0),
-                "path_loss_db": row["path_loss_db"],
-                "has_los": bool(row["has_los"]) if row["has_los"] is not None else None,
-                "distance_km": row["distance_km"],
-                "created_at": row["created_at"],
-            }
+    paths = [
+        TowerPathResponse(
+            id=row["id"],
+            tower_a_id=row["tower_a_id"],
+            tower_b_id=row["tower_b_id"],
+            lat_a=json.loads(row["params_a"]).get("lat", 0),
+            lon_a=json.loads(row["params_a"]).get("lon", 0),
+            lat_b=json.loads(row["params_b"]).get("lat", 0),
+            lon_b=json.loads(row["params_b"]).get("lon", 0),
+            path_loss_db=row["path_loss_db"],
+            has_los=bool(row["has_los"]) if row["has_los"] is not None else None,
+            distance_km=row["distance_km"],
+            created_at=row["created_at"],
         )
-
-    return JSONResponse({"paths": paths})
+        for row in rows
+    ]
+    return TowerPathListResponse(paths=paths)
 
 
 @app.delete("/tower-paths/{path_id}", dependencies=[Depends(require_admin)])
-async def delete_tower_path(path_id: str) -> JSONResponse:
+async def delete_tower_path(path_id: str) -> DeleteResponse | JSONResponse:
     """Delete a specific tower path."""
     return _delete_row("tower_paths", "id", path_id, "Path")
 
@@ -655,12 +636,7 @@ _deadzone_cache: dict[str, Any] = {"tower_count": 0, "result": None}
 
 @app.get("/deadzones", response_model=DeadzoneAnalysisResponse)
 async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
-    """Analyze coverage gaps across all completed tower simulations.
-
-    Requires at least 2 towers with completed GeoTIFF data. Merges their results
-    onto a common grid, identifies contiguous deadzone regions, and returns
-    up to 5 suggested tower sites for remediation.
-    """
+    """Analyze coverage gaps across all completed tower simulations."""
     geotiff_blobs: list[bytes] = []
 
     with db_connection() as conn:
@@ -674,7 +650,6 @@ async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
             status_code=400,
         )
 
-    # Return cached result if the tower count hasn't changed
     if _deadzone_cache["result"] is not None and _deadzone_cache["tower_count"] == len(geotiff_blobs):
         return _deadzone_cache["result"]
 

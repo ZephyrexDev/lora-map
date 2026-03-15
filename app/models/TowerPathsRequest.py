@@ -6,6 +6,5 @@ class TowerPathsRequest(BaseModel):
 
     tower_ids: list[str] | None = Field(
         None,
-        description="Optional list of tower IDs to compute paths between. "
-        "If omitted, all towers are used.",
+        description="Optional list of tower IDs to compute paths between. " "If omitted, all towers are used.",
     )

@@ -7,10 +7,11 @@ in the ``settings`` table under the key ``"matrix_config"``.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from datetime import UTC, datetime
 from itertools import product
+
+from app.models.MatrixConfigRequest import MatrixConfigRequest
 
 HARDWARE_RX_PARAMS: dict[str, dict[str, float]] = {
     "v3": {"rx_sensitivity": -130.0},
@@ -24,52 +25,52 @@ ANTENNA_RX_PARAMS: dict[str, dict[str, float]] = {
     "slinkdsco_omni": {"rx_gain": 4.0, "swr": 1.1},
 }
 
-DEFAULT_MATRIX_CONFIG: dict[str, list[str]] = {
-    "hardware": ["v3", "v4"],
-    "antennas": [
-        "ribbed_spring_helical",
-        "duck_stubby",
-        "bingfu_whip",
-        "slinkdsco_omni",
-    ],
-    "terrain": ["bare_earth"],
-}
+# Known valid values for matrix axes — derived from preset data.
+KNOWN_HARDWARE: frozenset[str] = frozenset(HARDWARE_RX_PARAMS.keys()) | {"custom"}
+KNOWN_ANTENNAS: frozenset[str] = frozenset(ANTENNA_RX_PARAMS.keys())
+KNOWN_TERRAIN: frozenset[str] = frozenset({"bare_earth", "dsm", "lulc_clutter", "weighted_aggregate"})
+
+DEFAULT_MATRIX_CONFIG = MatrixConfigRequest(
+    hardware=["v3", "v4"],
+    antennas=list(ANTENNA_RX_PARAMS.keys()),
+    terrain=["bare_earth"],
+)
 
 _SETTINGS_KEY = "matrix_config"
 
 
-def get_matrix_config(conn: sqlite3.Connection) -> dict[str, list[str]]:
+def get_matrix_config(conn: sqlite3.Connection) -> MatrixConfigRequest:
     """Read the matrix config from the settings table.
 
     Returns the default config when no row exists.
     """
     row = conn.execute("SELECT value FROM settings WHERE key = ?", (_SETTINGS_KEY,)).fetchone()
     if row is None:
-        return dict(DEFAULT_MATRIX_CONFIG)
-    return json.loads(row["value"])
+        return DEFAULT_MATRIX_CONFIG.model_copy()
+    return MatrixConfigRequest.model_validate_json(row["value"])
 
 
-def set_matrix_config(conn: sqlite3.Connection, config: dict[str, list[str]]) -> None:
+def set_matrix_config(conn: sqlite3.Connection, config: MatrixConfigRequest) -> None:
     """Upsert the matrix config into the settings table."""
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)"
         " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-        (_SETTINGS_KEY, json.dumps(config), now),
+        (_SETTINGS_KEY, config.model_dump_json(), now),
     )
     conn.commit()
 
 
-def get_matrix_combinations(config: dict[str, list[str]]) -> list[dict[str, str]]:
+def get_matrix_combinations(config: MatrixConfigRequest) -> list[dict[str, str]]:
     """Return the cartesian product of all enabled matrix axes.
 
     Each element is a dict with keys ``hardware``, ``antenna``, and ``terrain``.
     Returns an empty list if any axis is empty.
     """
-    hardware = config.get("hardware", [])
-    antennas = config.get("antennas", [])
+    hardware = config.hardware
+    antennas = config.antennas
     # weighted_aggregate is derived from the three base models, not a real simulation
-    terrain = [t for t in config.get("terrain", []) if t != "weighted_aggregate"]
+    terrain = [t for t in config.terrain if t != "weighted_aggregate"]
 
     if not hardware or not antennas or not terrain:
         return []
