@@ -1,0 +1,29 @@
+{
+  "hardware": [
+    { "name": "Heltec V3", "max_power_dbm": 22, "chip": "SX1262", "is_custom": false },
+    { "name": "Heltec V4", "max_power_dbm": 22, "chip": "SX1262", "is_custom": false },
+    { "name": "Custom", "max_power_dbm": 30, "chip": "N/A", "is_custom": true }
+  ],
+  "antennas": [
+    { "name": "Ribbed Spring Helical", "gain_dbi": 0, "swr": 3.0 },
+    { "name": "Duck Stubby", "gain_dbi": 1, "swr": 3.5 },
+    { "name": "Bingfu Whip", "gain_dbi": 2.5, "swr": 1.8 },
+    { "name": "Slinkdsco Omni", "gain_dbi": 4, "swr": 1.1 }
+  ],
+  "frequencies": [
+    { "region": "Canada", "code": "CA", "frequency_mhz": 907, "max_power_dbm": 30 },
+    { "region": "United States", "code": "US", "frequency_mhz": 915, "max_power_dbm": 30 },
+    { "region": "European Union", "code": "EU", "frequency_mhz": 868, "max_power_dbm": 14 },
+    { "region": "Australia", "code": "AU", "frequency_mhz": 915, "max_power_dbm": 30 },
+    { "region": "Japan", "code": "JP", "frequency_mhz": 920, "max_power_dbm": 13 }
+  ],
+  "heights": [
+    { "label": "Ground Level", "height_m": 1 },
+    { "label": "First Floor Window", "height_m": 3 },
+    { "label": "Second Floor Window", "height_m": 6 },
+    { "label": "Gutter Line", "height_m": 8 },
+    { "label": "Rooftop", "height_m": 10 },
+    { "label": "Roof Tower", "height_m": 15 },
+    { "label": "Ground Tower", "height_m": 30 }
+  ]
+}
