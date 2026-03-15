@@ -3,11 +3,11 @@
     <div class="mb-2">
       <label class="form-label fw-bold mb-1">Hardware</label>
       <div>
-        <div class="form-check form-check-inline" v-for="hw in hardwareOptions" :key="hw.key">
+        <div v-for="hw in hardwareOptions" :key="hw.key" class="form-check form-check-inline">
           <input
+            :id="'hw-' + hw.key"
             class="form-check-input"
             type="checkbox"
-            :id="'hw-' + hw.key"
             :checked="config.hardware[hw.key]"
             @change="toggle('hardware', hw.key)"
           />
@@ -18,11 +18,11 @@
     <div class="mb-2">
       <label class="form-label fw-bold mb-1">Antennas</label>
       <div>
-        <div class="form-check form-check-inline" v-for="ant in antennaOptions" :key="ant.key">
+        <div v-for="ant in antennaOptions" :key="ant.key" class="form-check form-check-inline">
           <input
+            :id="'ant-' + ant.key"
             class="form-check-input"
             type="checkbox"
-            :id="'ant-' + ant.key"
             :checked="config.antennas[ant.key]"
             @change="toggle('antennas', ant.key)"
           />
@@ -33,11 +33,11 @@
     <div class="mb-1">
       <label class="form-label fw-bold mb-1">Terrain</label>
       <div>
-        <div class="form-check form-check-inline" v-for="ter in terrainOptions" :key="ter.key">
+        <div v-for="ter in terrainOptions" :key="ter.key" class="form-check form-check-inline">
           <input
+            :id="'ter-' + ter.key"
             class="form-check-input"
             type="checkbox"
-            :id="'ter-' + ter.key"
             :checked="config.terrain[ter.key]"
             @change="toggle('terrain', ter.key)"
           />

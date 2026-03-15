@@ -76,7 +76,7 @@ describe("sampleRaster", () => {
   });
 
   it("returns correct value from a raster with varying pixel values", () => {
-    const values = [Array.from({ length: 100 }, (_, row) => Array.from({ length: 100 }, (_, col) => row + col))];
+    const values = [Array.from({ length: 100 }, (_r, row) => Array.from({ length: 100 }, (_c, col) => row + col))];
     const raster = makeRaster({ values });
     // Compute expected row/col from the sampleRaster formula
     const row = Math.floor((51 - 50.95) / 0.01); // = 5

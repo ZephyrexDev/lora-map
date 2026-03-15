@@ -1,3 +1,5 @@
+import type { SplatParams } from "./types";
+
 /**
  * Map path loss (dB) and LOS status to a color for polyline rendering.
  * Green = good (low loss, LOS), yellow = marginal, red = poor (high loss or NLOS).
@@ -55,7 +57,7 @@ export function isTiffBuffer(buffer: ArrayBuffer): boolean {
  * Build the simulation API payload from SplatParams.
  * Converts watts → dBm, km → m, and remaps field names to backend API keys.
  */
-export function buildSimulationPayload(params: import("./types").SplatParams): Record<string, unknown> {
+export function buildSimulationPayload(params: SplatParams): Record<string, unknown> {
   return {
     lat: params.transmitter.tx_lat,
     lon: params.transmitter.tx_lon,

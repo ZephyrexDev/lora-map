@@ -2,21 +2,12 @@
 
 ## Project Overview
 
-LoRa Coverage Planner — a full-stack radio coverage prediction tool using SPLAT! (ITM/Longley-Rice model). Admins configure tower sites with hardware presets, run coverage simulations, and build multi-tower mesh path visualizations. Visitors see cached results with toggleable coverage layers on an interactive Leaflet map. Formerly Meshtastic Site Planner — all Meshtastic-specific branding is being replaced with generic LoRa terminology.
+LoRa Coverage Planner — a full-stack radio coverage prediction tool using SPLAT! (ITM/Longley-Rice model). Admins configure tower sites with hardware presets, run coverage simulations, and build multi-tower mesh path visualizations. Visitors see cached results with toggleable coverage layers on an interactive Leaflet map.
 
 ## Active Goals
 
-1. ~~**Rebrand:** Remove all Meshtastic branding. Use generic LoRa terminology throughout (codebase, UI, assets, deployment config).~~ **Done.**
-2. ~~**Podman migration:** Replace `Dockerfile` → `Containerfile`, `docker-compose.yml` → `compose.yml`. Target single-container deployment. Compose file kept for convenience.~~ **Done.**
-3. ~~**Persistent towers & toggleable layers:** Tower data and simulation results persist in SQLite. Each tower's coverage layer is independently toggleable without triggering re-renders of other layers. Cached GeoTIFF results load instantly.~~ **Done.**
-4. **Meshcore tower path simulation:** Visualize inter-tower mesh paths (line-of-sight links, path loss) to form a tower web overlay. Requires pairwise SPLAT! point-to-point analysis between tower sites. **In progress.**
-5. ~~**Hardware & environment presets:** Preselect hardware (Heltec V3, Heltec V4, custom) to auto-fill power/gain. Frequency determined by country/region (e.g., Canada legal frequency). Antenna preselection from a curated gain list. Height presets: ground level, first floor window, second floor window, gutter line, rooftop, ground tower, roof tower.~~ **Done.**
-6. ~~**Admin/visitor roles:** Settings and simulation triggers require admin credentials. Visitors see cached simulations loaded instantly with no edit capability. Auth must gate the API, not just the UI.~~ **Done.**
-7. ~~**Per-tower color rendering:** Assign each tower a distinct color from a 24-color palette for its coverage layer.~~ **Done.**
-8. ~~**Overlap hatching:** Render hatched overlay where multiple tower coverage areas overlap.~~ **Done.**
-9. **Deadzone remediation:** Identify and visualize gaps in coverage to guide new tower placement. **In progress.**
-10. ~~**Multi-source terrain:** Support multiple terrain data providers beyond AWS S3 elevation tiles.~~ **Done.**
-11. ~~**Client simulation matrix:** Generate combinatorial simulation configs from matrix of client hardware, antenna, frequency, and height parameters.~~ **Done.**
+1. **Meshcore tower path simulation:** Visualize inter-tower mesh paths (line-of-sight links, path loss) to form a tower web overlay. Requires pairwise SPLAT! point-to-point analysis between tower sites. **In progress.**
+2. **Deadzone remediation:** Identify and visualize gaps in coverage to guide new tower placement. **In progress.**
 
 ## Architecture
 
@@ -101,15 +92,21 @@ podman-compose up         # Dev convenience (optional)
 ### TypeScript / Vue
 
 - Use TypeScript strict mode. All exports must be typed — no `any` except where third-party types are missing (e.g., georaster).
-- Lint with **ESLint** (`eslint .`) using `@typescript-eslint` and `eslint-plugin-vue`. Format with **Prettier**.
+- Lint with **ESLint** (`eslint .`) using `@typescript-eslint` and `eslint-plugin-vue`. Format with **Prettier**. ESLint runs with type-aware rules via `parserOptions.project`.
 - Follow modern TypeScript idioms: discriminated unions over type assertions, `satisfies` for safe narrowing, `readonly` where mutation isn't needed, `as const` for literal types.
 - Define shared interfaces in `src/types.ts`. Keep the single source of truth for data shapes.
 - **Favor object-oriented design and class-based abstractions.** Use classes for stateful services, models, and anything with lifecycle. Use interfaces and generics to define contracts. Prefer composition via injected dependencies over standalone functions with implicit coupling.
 - **Minimize code volume.** Extract shared logic into base classes, generic utilities, or composables. Consolidate repeated patterns — two near-identical blocks should become one parameterized abstraction.
 - Use Vue 3 Composition API for new components. Existing Options API code does not need to be rewritten unless being significantly modified.
-- Use Pinia for shared state. Components should not hold state that other components need.
+- Use Pinia for shared state. Components should not hold state that other components need. Use Pinia actions or reactive state for cross-component communication — never `window.dispatchEvent` / `CustomEvent`.
 - Prefer `const` over `let`. Never use `var`.
 - Use template literals over string concatenation.
+- Never use `console.log` in committed code. Use `console.warn` or `console.error` for diagnostics.
+- **No inline HTML event handlers.** Never use `onclick`, `onload`, or similar attributes in dynamically constructed HTML (e.g., Leaflet popups, template literals). Use `addEventListener` after DOM insertion instead.
+- **No magic numbers.** Extract timeouts, poll intervals, zoom levels, and other numeric constants to named `const` declarations at the top of the file.
+- **Preset dropdowns keyed by stable identifiers.** Use `name`, `code`, or `label` as `<option>` values — never array indices, which break when order changes.
+- **Clean up lifecycle resources.** Capture all timer IDs from `setTimeout`/`setInterval` and clear them in `onUnmounted`. Dispose Bootstrap instances (Popover, Tooltip, Modal) in `onUnmounted`. Never leave dangling event listeners or orphaned timers.
+- **Handle every promise.** Every `async` call must be `await`ed, `.catch()`-ed, or explicitly marked `void`. Unhandled rejections silently swallow errors.
 
 ### General
 

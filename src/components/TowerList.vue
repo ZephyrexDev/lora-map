@@ -26,6 +26,7 @@
             class="btn btn-sm btn-outline-light py-1 px-2"
             style="min-width: 36px; min-height: 36px"
             :title="site.visible ? 'Hide layer' : 'Show layer'"
+            :aria-label="site.visible ? 'Hide layer' : 'Show layer'"
             @click="store.toggleSiteVisibility(index)"
           >
             <span v-if="site.visible">&#x1F441;&#xFE0F;</span>
@@ -37,6 +38,7 @@
             class="btn btn-sm btn-outline-danger py-1 px-2"
             style="min-width: 36px; min-height: 36px"
             title="Delete tower"
+            aria-label="Delete tower"
             @click="store.removeSite(index)"
           >
             &#x1F5D1;&#xFE0F;
@@ -71,10 +73,14 @@ import { ref, watch, onUnmounted } from "vue";
 import { useStore } from "../store.ts";
 import { type SimProgress } from "../types.ts";
 
+const PROGRESS_POLL_MS = 5000;
+const PATH_RELOAD_DELAY_MS = 5000;
+
 const store = useStore();
 
 const progress = ref<Record<string, SimProgress>>({});
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let pathReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function fetchProgress() {
   if (!store.isAdmin) return;
@@ -100,7 +106,7 @@ async function fetchProgress() {
 
   // Poll every 5 seconds while any simulations are pending
   if (anyPending) {
-    pollTimer = setTimeout(fetchProgress, 5000);
+    pollTimer = setTimeout(fetchProgress, PROGRESS_POLL_MS);
   } else {
     pollTimer = null;
   }
@@ -130,6 +136,10 @@ onUnmounted(() => {
     clearTimeout(pollTimer);
     pollTimer = null;
   }
+  if (pathReloadTimer) {
+    clearTimeout(pathReloadTimer);
+    pathReloadTimer = null;
+  }
 });
 
 async function recomputePaths(): Promise<void> {
@@ -147,7 +157,7 @@ async function recomputePaths(): Promise<void> {
       return;
     }
     // Wait a few seconds for background tasks, then reload
-    setTimeout(() => store.loadTowerPaths(), 5000);
+    pathReloadTimer = setTimeout(() => store.loadTowerPaths(), PATH_RELOAD_DELAY_MS);
   } catch (err) {
     console.warn("Error recomputing paths:", err);
   }

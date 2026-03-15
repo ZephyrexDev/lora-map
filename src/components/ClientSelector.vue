@@ -96,54 +96,57 @@ onMounted(async () => {
 async function onSelectionChange() {
   pendingMessage.value = "";
 
-  for (const site of store.localSites) {
-    if (!site.taskId) continue;
-    try {
-      const response = await fetch(`/towers/${site.taskId}/simulations?enabled_only=true`);
-      if (!response.ok) continue;
-      const data = await response.json();
-      const simulations: SimulationRecord[] = data.simulations ?? [];
+  const tasks = store.localSites
+    .filter((site) => site.taskId)
+    .map(async (site) => {
+      try {
+        const response = await fetch(`/towers/${site.taskId}/simulations?enabled_only=true`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const simulations: SimulationRecord[] = data.simulations ?? [];
 
-      if (store.clientTerrain === "weighted_aggregate") {
-        // Weighted aggregate is computed server-side from all three base terrain models
-        try {
-          const aggResponse = await fetch(
-            `/towers/${site.taskId}/aggregate?client_hardware=${store.clientHardware}&client_antenna=${store.clientAntenna}`,
-          );
-          if (aggResponse.ok) {
-            const arrayBuffer = await aggResponse.arrayBuffer();
-            if (isTiffBuffer(arrayBuffer)) {
-              await store.swapSimulationLayerFromBuffer(site.taskId, arrayBuffer);
-              continue;
+        if (store.clientTerrain === "weighted_aggregate") {
+          try {
+            const aggResponse = await fetch(
+              `/towers/${site.taskId}/aggregate?client_hardware=${store.clientHardware}&client_antenna=${store.clientAntenna}`,
+            );
+            if (aggResponse.ok) {
+              const arrayBuffer = await aggResponse.arrayBuffer();
+              if (isTiffBuffer(arrayBuffer)) {
+                await store.swapSimulationLayerFromBuffer(site.taskId, arrayBuffer);
+                return;
+              }
             }
+            pendingMessage.value = "Aggregate requires all 3 base terrain simulations";
+          } catch (err) {
+            console.warn("Error fetching aggregate:", err);
+            pendingMessage.value = "Aggregate unavailable";
           }
-          pendingMessage.value = "Aggregate requires all 3 base terrain simulations";
-        } catch (err) {
-          console.warn("Error fetching aggregate:", err);
-          pendingMessage.value = "Aggregate unavailable";
+          return;
         }
-        continue;
-      }
 
-      const match = simulations.find(
-        (sim) =>
-          sim.client_hardware === store.clientHardware &&
-          sim.client_antenna === store.clientAntenna &&
-          sim.terrain_model === store.clientTerrain,
-      );
+        const match = simulations.find(
+          (sim) =>
+            sim.client_hardware === store.clientHardware &&
+            sim.client_antenna === store.clientAntenna &&
+            sim.terrain_model === store.clientTerrain,
+        );
 
-      if (match) {
-        if (match.status === "completed") {
-          await store.swapSimulationLayer(site.taskId, match.id);
+        if (match) {
+          if (match.status === "completed") {
+            await store.swapSimulationLayer(site.taskId, match.id);
+          } else {
+            pendingMessage.value = "Simulation pending...";
+          }
         } else {
-          pendingMessage.value = "Simulation pending...";
+          pendingMessage.value = "No simulation for this combination";
         }
-      } else {
-        pendingMessage.value = "No simulation for this combination";
+      } catch (err) {
+        console.warn("Error fetching simulations for tower:", site.taskId, err);
+        pendingMessage.value = "Failed to load simulation data";
       }
-    } catch (err) {
-      console.warn("Error fetching simulations for tower:", site.taskId, err);
-    }
-  }
+    });
+
+  await Promise.all(tasks);
 }
 </script>

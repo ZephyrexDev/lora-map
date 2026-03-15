@@ -80,5 +80,5 @@
 
 <script setup lang="ts">
 import { useStore } from "../store.ts";
-const environment = useStore().splatParams.environment;
+const {environment} = useStore().splatParams;
 </script>

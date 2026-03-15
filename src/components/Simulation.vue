@@ -51,5 +51,5 @@
 
 <script setup lang="ts">
 import { useStore } from "../store.ts";
-const simulation = useStore().splatParams.simulation;
+const {simulation} = useStore().splatParams;
 </script>

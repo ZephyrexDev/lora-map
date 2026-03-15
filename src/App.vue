@@ -209,7 +209,7 @@
         </div>
       </div>
     </nav>
-    <div id="map" ref="map"></div>
+    <div id="map"></div>
     <LoginForm />
   </div>
 </template>

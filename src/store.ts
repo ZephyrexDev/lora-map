@@ -18,6 +18,15 @@ import { redPinMarker } from "./layers.ts";
 import { createOverlapHatchLayer } from "./layers/OverlapHatchLayer.ts";
 import { DeadzoneCanvasLayer } from "./deadzoneLayer.ts";
 
+/** Delay (ms) before reloading tower paths after a simulation completes. */
+const PATH_RELOAD_DELAY_MS = 5000;
+/** Interval (ms) between simulation status polls. */
+const POLL_INTERVAL_MS = 1000;
+/** Maximum number of status polls before declaring a timeout (~5 minutes). */
+const MAX_POLL_COUNT = 300;
+/** Default map zoom level. */
+const DEFAULT_ZOOM = 10;
+
 const useStore = defineStore("store", {
   state() {
     return {
@@ -39,12 +48,14 @@ const useStore = defineStore("store", {
       deadzoneAnalysis: null as DeadzoneAnalysis | null,
       deadzoneLayer: null as DeadzoneCanvasLayer | null,
       suggestionMarkers: [] as L.Marker[],
+      _pathReloadTimer: 0 as number,
+      _prefillCoords: null as { lat: number; lon: number } | null,
       matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
-          tx_lat: 51.102167,
-          tx_lon: -114.098667,
+          tx_lat: 53.5461,
+          tx_lon: -113.4937,
           tx_power: 0.1,
           tx_freq: 907.0,
           tx_height: 2.0,
@@ -116,8 +127,13 @@ const useStore = defineStore("store", {
             const geoRaster = await parseGeoraster(arrayBuffer);
 
             const colorIndex = this.localSites.length % TOWER_COLORS.length;
+            const params = tower.params as Record<string, unknown>;
+            if (!params.transmitter || !params.receiver || !params.environment || !params.simulation || !params.display) {
+              console.warn("Skipping tower with malformed params:", tower.id);
+              continue;
+            }
             this.localSites.push({
-              params: tower.params as unknown as SplatParams,
+              params: params as SplatParams,
               taskId: tower.id,
               raster: geoRaster,
               color: tower.color || TOWER_COLORS[colorIndex],
@@ -188,7 +204,10 @@ const useStore = defineStore("store", {
         );
 
         const lossText = path.path_loss_db !== null ? `${path.path_loss_db.toFixed(1)} dB` : "pending";
-        const losText = path.has_los === null ? "pending" : path.has_los ? "Yes" : "No";
+        let losText = "pending";
+        if (path.has_los !== null) {
+          losText = path.has_los ? "Yes" : "No";
+        }
         const distText = path.distance_km !== null ? `${path.distance_km.toFixed(1)} km` : "pending";
         polyline.bindPopup(`<b>Path Loss:</b> ${lossText}<br><b>LOS:</b> ${losText}<br><b>Distance:</b> ${distText}`);
 
@@ -279,13 +298,18 @@ const useStore = defineStore("store", {
             <hr style="margin: 4px 0">
             <b>Est. coverage:</b> ${suggestion.estimated_coverage_km2.toFixed(1)} km&sup2;<br>
             <b>Location:</b> ${suggestion.lat.toFixed(4)}, ${suggestion.lon.toFixed(4)}<br>
-            <button class="btn btn-sm btn-primary mt-2" onclick="
-              window.dispatchEvent(new CustomEvent('prefill-transmitter', {
-                detail: { lat: ${suggestion.lat}, lon: ${suggestion.lon} }
-              }))
-            ">Use as transmitter site</button>
+            <button class="btn btn-sm btn-primary mt-2 js-prefill-btn">Use as transmitter site</button>
           </div>
         `);
+
+        const { lat, lon } = suggestion;
+        marker.on("popupopen", () => {
+          const btn = marker.getPopup()?.getElement()?.querySelector(".js-prefill-btn");
+          btn?.addEventListener("click", () => {
+            this.prefillTransmitter(lat, lon);
+          });
+        });
+
         this.suggestionMarkers.push(marker);
       }
     },
@@ -369,6 +393,9 @@ const useStore = defineStore("store", {
     setTxCoords(lat: number, lon: number) {
       this.splatParams.transmitter.tx_lat = lat;
       this.splatParams.transmitter.tx_lon = lon;
+    },
+    prefillTransmitter(lat: number, lon: number) {
+      this._prefillCoords = { lat, lon };
     },
     async removeSite(index: number) {
       if (!this.map) return;
@@ -483,11 +510,11 @@ const useStore = defineStore("store", {
     },
     initMap() {
       this.map = L.map("map", {
-        zoom: 10,
+        zoom: DEFAULT_ZOOM,
         zoomControl: false,
       });
       const position: [number, number] = [this.splatParams.transmitter.tx_lat, this.splatParams.transmitter.tx_lon];
-      this.map.setView(position, 10);
+      this.map.setView(position, DEFAULT_ZOOM);
 
       L.control.zoom({ position: "bottomleft" }).addTo(this.map as L.Map);
 
@@ -581,11 +608,22 @@ const useStore = defineStore("store", {
         const taskId = predictData.task_id;
 
         // Poll for task status and result
-        const pollInterval = 1000; // 1 seconds
+        const pollInterval = POLL_INTERVAL_MS;
+        const maxPolls = MAX_POLL_COUNT;
+        let pollCount = 0;
         const pollStatus = async () => {
+          pollCount++;
+          if (pollCount > maxPolls) {
+            this.simulationState = "failed";
+            this.simulationError = "Simulation timed out after 5 minutes";
+            return;
+          }
+
           const statusResponse = await fetch(`/status/${taskId}`);
           if (!statusResponse.ok) {
-            throw new Error("Failed to fetch task status.");
+            this.simulationState = "failed";
+            this.simulationError = "Failed to fetch task status";
+            return;
           }
 
           const statusData = await statusResponse.json();
@@ -608,12 +646,12 @@ const useStore = defineStore("store", {
                 color: TOWER_COLORS[colorIndex],
                 visible: true,
               });
-              this.currentMarker!.removeFrom(this.map as L.Map);
+              this.currentMarker?.removeFrom(this.map as L.Map);
               this.splatParams.transmitter.name = await randanimalSync();
               this.redrawSites();
               this.updateOverlapLayer();
-              // Reload tower paths since the new tower may have triggered path computation
-              setTimeout(() => this.loadTowerPaths(), 5000);
+              // Reload tower paths after backend has time to compute
+              this._pathReloadTimer = window.setTimeout(() => this.loadTowerPaths(), PATH_RELOAD_DELAY_MS);
               if (this.showDeadzones) {
                 this.fetchDeadzones();
               }
@@ -630,7 +668,9 @@ const useStore = defineStore("store", {
 
         pollStatus(); // Start polling
       } catch (error) {
-        console.error("Error:", error);
+        this.simulationState = "failed";
+        this.simulationError = error instanceof Error ? error.message : "Unknown error";
+        console.error("Simulation error:", error);
       }
     },
   },

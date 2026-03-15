@@ -64,5 +64,5 @@
 
 <script setup lang="ts">
 import { useStore } from "../store.ts";
-const receiver = useStore().splatParams.receiver;
+const {receiver} = useStore().splatParams;
 </script>

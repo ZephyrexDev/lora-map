@@ -7,7 +7,7 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "skipLibCheck": true,
 
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "typeRoots": ["./node_modules/@types", "./src/types"],
 
     /* Bundler mode */

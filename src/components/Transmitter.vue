@@ -1,5 +1,5 @@
 <template>
-  <form novalidate>
+  <form ref="formRef" novalidate @submit.prevent @input="validateForm">
     <div class="row g-2">
       <div class="col-12 col-sm-8">
         <label for="name" class="form-label">Site name</label>
@@ -82,8 +82,8 @@
           class="form-select form-select-sm"
           @change="onHardwareChange"
         >
-          <option :value="-1">Custom</option>
-          <option v-for="(hw, idx) in HARDWARE_PRESETS" :key="idx" :value="idx">
+          <option value="">Custom</option>
+          <option v-for="hw in HARDWARE_PRESETS" :key="hw.name" :value="hw.name">
             {{ hw.name }}{{ hw.is_custom ? "" : ` (${hw.max_power_dbm} dBm)` }}
           </option>
         </select>
@@ -91,8 +91,8 @@
       <div class="col-12 col-sm-6">
         <label for="regionPreset" class="form-label">Country / Region</label>
         <select id="regionPreset" v-model="selectedRegion" class="form-select form-select-sm" @change="onRegionChange">
-          <option :value="-1">Custom</option>
-          <option v-for="(freq, idx) in FREQUENCY_PRESETS" :key="idx" :value="idx">
+          <option value="">Custom</option>
+          <option v-for="freq in FREQUENCY_PRESETS" :key="freq.code" :value="freq.code">
             {{ freq.region }} ({{ freq.code }}) — {{ freq.frequency_mhz }} MHz
           </option>
         </select>
@@ -108,8 +108,8 @@
             class="form-select form-select-sm flex-grow-1"
             @change="onAntennaChange"
           >
-            <option :value="-1">Custom</option>
-            <option v-for="(ant, idx) in ANTENNA_PRESETS" :key="idx" :value="idx">
+            <option value="">Custom</option>
+            <option v-for="ant in ANTENNA_PRESETS" :key="ant.name" :value="ant.name">
               {{ ant.name }} ({{ ant.gain_dbi }} dBi)
             </option>
           </select>
@@ -125,8 +125,8 @@
       <div class="col-12 col-sm-6">
         <label for="heightPreset" class="form-label">Height Preset</label>
         <select id="heightPreset" v-model="selectedHeight" class="form-select form-select-sm" @change="onHeightChange">
-          <option :value="-1">Custom</option>
-          <option v-for="(h, idx) in HEIGHT_PRESETS" :key="idx" :value="idx">{{ h.label }} ({{ h.height_m }} m)</option>
+          <option value="">Custom</option>
+          <option v-for="h in HEIGHT_PRESETS" :key="h.label" :value="h.label">{{ h.label }} ({{ h.height_m }} m)</option>
         </select>
       </div>
     </div>
@@ -225,7 +225,7 @@
 import L from "leaflet";
 import * as bootstrap from "bootstrap";
 import { useStore } from "../store.ts";
-import { onMounted, onUnmounted, ref, computed } from "vue";
+import { onMounted, onUnmounted, ref, computed, watch } from "vue";
 import { redPinMarker } from "../layers.ts";
 import { dbmToWatts } from "../utils.ts";
 import { HARDWARE_PRESETS } from "../presets/hardware.ts";
@@ -234,55 +234,59 @@ import { ANTENNA_PRESETS, mismatchLoss } from "../presets/antennas.ts";
 import { HEIGHT_PRESETS } from "../presets/heights.ts";
 
 const store = useStore();
-const transmitter = store.splatParams.transmitter;
+const { transmitter } = store.splatParams;
+const formRef = ref<HTMLFormElement | null>(null);
 
-// Preset selection state (-1 means "Custom")
-const selectedHardware = ref(-1);
-const selectedRegion = ref(-1);
-const selectedAntenna = ref(-1);
-const selectedHeight = ref(-1);
+function validateForm() {
+  formRef.value?.classList.add("was-validated");
+}
+
+// Preset selection state ("" means "Custom")
+const selectedHardware = ref("");
+const selectedRegion = ref("");
+const selectedAntenna = ref("");
+const selectedHeight = ref("");
+
+const activeHardwarePreset = computed(() => HARDWARE_PRESETS.find((p) => p.name === selectedHardware.value));
+const activeRegionPreset = computed(() => FREQUENCY_PRESETS.find((p) => p.code === selectedRegion.value));
+const activeAntennaPreset = computed(() => ANTENNA_PRESETS.find((p) => p.name === selectedAntenna.value));
+const activeHeightPreset = computed(() => HEIGHT_PRESETS.find((p) => p.label === selectedHeight.value));
 
 const isHardwarePresetActive = computed(() => {
-  if (selectedHardware.value < 0) return false;
-  const preset = HARDWARE_PRESETS[selectedHardware.value];
-  return preset && !preset.is_custom;
+  const preset = activeHardwarePreset.value;
+  return preset !== undefined && !preset.is_custom;
 });
-const isRegionPresetActive = computed(() => selectedRegion.value >= 0);
-const isAntennaPresetActive = computed(() => selectedAntenna.value >= 0);
-const isHeightPresetActive = computed(() => selectedHeight.value >= 0);
+const isRegionPresetActive = computed(() => activeRegionPreset.value !== undefined);
+const isAntennaPresetActive = computed(() => activeAntennaPreset.value !== undefined);
+const isHeightPresetActive = computed(() => activeHeightPreset.value !== undefined);
 
 const mismatchLossBadge = computed(() => {
-  if (selectedAntenna.value < 0) return null;
-  const preset = ANTENNA_PRESETS[selectedAntenna.value];
+  const preset = activeAntennaPreset.value;
   if (!preset) return null;
   return mismatchLoss(preset.swr).toFixed(2);
 });
 
 function onHardwareChange() {
-  if (selectedHardware.value < 0) return;
-  const preset = HARDWARE_PRESETS[selectedHardware.value];
+  const preset = activeHardwarePreset.value;
   if (!preset || preset.is_custom) return;
   transmitter.tx_power = dbmToWatts(preset.max_power_dbm);
 }
 
 function onRegionChange() {
-  if (selectedRegion.value < 0) return;
-  const preset = FREQUENCY_PRESETS[selectedRegion.value];
+  const preset = activeRegionPreset.value;
   if (!preset) return;
   transmitter.tx_freq = preset.frequency_mhz;
 }
 
 function onAntennaChange() {
-  if (selectedAntenna.value < 0) return;
-  const preset = ANTENNA_PRESETS[selectedAntenna.value];
+  const preset = activeAntennaPreset.value;
   if (!preset) return;
   transmitter.tx_gain = preset.gain_dbi;
   transmitter.tx_swr = preset.swr;
 }
 
 function onHeightChange() {
-  if (selectedHeight.value < 0) return;
-  const preset = HEIGHT_PRESETS[selectedHeight.value];
+  const preset = activeHeightPreset.value;
   if (!preset) return;
   transmitter.tx_height = preset.height_m;
 }
@@ -296,56 +300,61 @@ function toggleAutoColor() {
 }
 
 const centerMapOnTransmitter = () => {
+  if (!store.map) return;
   if (!isNaN(transmitter.tx_lat) && !isNaN(transmitter.tx_lon)) {
-    store.map!.setView([transmitter.tx_lat, transmitter.tx_lon], store.map!.getZoom()); // Center map on the coordinates
+    store.map.setView([transmitter.tx_lat, transmitter.tx_lon], store.map.getZoom());
   } else {
     alert("Please enter valid Latitude and Longitude values.");
   }
 };
-let popover = new bootstrap.Popover(document.createElement("input"), {
-  trigger: "manual",
-});
+let popover: bootstrap.Popover | null = null;
 
 const setWithMap = () => {
-  popover.show();
-  store.map!.once("click", function (e: L.LeafletMouseEvent) {
+  if (!store.map) return;
+  popover?.show();
+  store.map.once("click", (e: L.LeafletMouseEvent) => {
     const { lat } = e.latlng;
-    let { lng } = e.latlng; // Get clicked location coordinates
+    let { lng } = e.latlng;
     lng = ((((lng + 180) % 360) + 360) % 360) - 180;
 
     store.setTxCoords(parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6)));
 
-    // Remove the existing marker if it exists
-    if (store.currentMarker) {
-      store.map!.removeLayer(store.currentMarker as L.Marker);
+    if (store.currentMarker && store.map) {
+      store.map.removeLayer(store.currentMarker as L.Marker);
     }
-    // Add a new marker at the clicked location
-    store.currentMarker = L.marker([lat, lng], { icon: redPinMarker }).addTo(store.map as L.Map);
-    popover.hide(); // Hide the popover
+    if (store.map) {
+      store.currentMarker = L.marker([lat, lng], { icon: redPinMarker }).addTo(store.map);
+    }
+    popover?.hide();
   });
 };
-function onPrefillTransmitter(e: Event) {
-  const { lat, lon } = (e as CustomEvent).detail;
-  transmitter.tx_lat = lat;
-  transmitter.tx_lon = lon;
+watch(
+  () => store._prefillCoords,
+  (coords) => {
+    if (!coords) return;
+    const { lat, lon } = coords;
+    transmitter.tx_lat = lat;
+    transmitter.tx_lon = lon;
 
-  // Place a marker at the pre-filled location
-  if (store.currentMarker) {
-    store.map!.removeLayer(store.currentMarker as L.Marker);
-  }
-  store.currentMarker = L.marker([lat, lon], { icon: redPinMarker }).addTo(store.map as L.Map);
-  store.map!.setView([lat, lon], store.map!.getZoom());
-}
+    if (!store.map) return;
+    if (store.currentMarker) {
+      store.map.removeLayer(store.currentMarker as L.Marker);
+    }
+    store.currentMarker = L.marker([lat, lon], { icon: redPinMarker }).addTo(store.map);
+    store.map.setView([lat, lon], store.map.getZoom());
+    store._prefillCoords = null;
+  },
+);
 
 onMounted(() => {
   popover = new bootstrap.Popover(document.getElementById("setWithMap") as Element, {
     trigger: "manual",
   });
   store.initMap();
-  window.addEventListener("prefill-transmitter", onPrefillTransmitter);
 });
 
 onUnmounted(() => {
-  window.removeEventListener("prefill-transmitter", onPrefillTransmitter);
+  popover?.dispose();
+  popover = null;
 });
 </script>

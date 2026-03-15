@@ -107,7 +107,7 @@ const OverlapHatchLayer = L.GridLayer.extend({
 
     // Create ImageData for direct pixel manipulation
     const imageData = ctx.createImageData(tileSize.x, tileSize.y);
-    const data = imageData.data;
+    const {data} = imageData;
 
     // Pre-compute stripe angles for each tower
     const angles = towers.map((_t: TowerInfo, i: number) => STRIPE_ANGLES[i % STRIPE_ANGLES.length]);
@@ -119,8 +119,8 @@ const OverlapHatchLayer = L.GridLayer.extend({
         // Convert pixel to lat/lng
         const point = L.point(nwPoint.x + px, nwPoint.y + py);
         const latlng = map.unproject(point, zoom);
-        const lat = latlng.lat;
-        const lng = latlng.lng;
+        const {lat} = latlng;
+        const {lng} = latlng;
 
         // Sample each tower's raster at this location
         const towerValues: (number | null)[] = [];

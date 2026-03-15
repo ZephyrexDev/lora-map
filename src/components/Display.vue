@@ -4,10 +4,10 @@
       <div class="col-12 col-sm-6">
         <label for="min_dbm" class="form-label">Minimum dBm</label>
         <input
+          id="min_dbm"
           v-model="display.min_dbm"
           type="number"
           class="form-control form-control-sm"
-          id="min_dbm"
           required
           step="0.1"
         />
@@ -16,10 +16,10 @@
       <div class="col-12 col-sm-6">
         <label for="max_dbm" class="form-label">Maximum dBm</label>
         <input
+          id="max_dbm"
           v-model="display.max_dbm"
           type="number"
           class="form-control form-control-sm"
-          id="max_dbm"
           required
           step="0.1"
         />
@@ -29,7 +29,7 @@
     <div class="row g-2 mt-2">
       <div class="col-12 col-sm-6">
         <label for="color_scale" class="form-label">Color Scale</label>
-        <select v-model="display.color_scale" id="color_scale" class="form-select form-select-sm" required>
+        <select id="color_scale" v-model="display.color_scale" class="form-select form-select-sm" required>
           <option value="plasma" selected>Plasma</option>
           <option value="CMRmap">CMR map</option>
           <option value="cool">Cool</option>
@@ -42,10 +42,10 @@
       <div class="col-12 col-sm-6">
         <label for="overlay_transparency" class="form-label">Transparency (%)</label>
         <input
+          id="overlay_transparency"
           v-model="display.overlay_transparency"
           type="number"
           class="form-control form-control-sm"
-          id="overlay_transparency"
           required
           min="0"
           max="100"
@@ -58,8 +58,8 @@
       <div class="col-12">
         <label for="overlap_mode" class="form-label">Overlap Mode</label>
         <select
-          v-model="display.overlapMode"
           id="overlap_mode"
+          v-model="display.overlapMode"
           class="form-select form-select-sm"
           @change="onOverlapModeChange"
         >
@@ -84,10 +84,10 @@
     <hr class="my-3" />
     <div class="form-check form-switch">
       <input
+        id="deadzoneToggle"
         class="form-check-input"
         type="checkbox"
         role="switch"
-        id="deadzoneToggle"
         :checked="store.showDeadzones"
         :disabled="store.localSites.length < 2"
         @change="store.toggleDeadzones()"
@@ -113,7 +113,7 @@
 <script setup lang="ts">
 import { useStore } from "../store.ts";
 const store = useStore();
-const display = store.splatParams.display;
+const {display} = store.splatParams;
 
 function onOverlapModeChange() {
   store.updateOverlapLayer();
