@@ -23,9 +23,9 @@
 
 ## 3. Replace Redis with SQLite
 
-- [ ] Add SQLite schema: `towers` table (id, name, params JSON, geotiff BLOB, created_at, updated_at)
-- [ ] Add SQLite schema: `tasks` table (id, tower_id, status, error, created_at)
-- [ ] Create `app/db/` module with schema init and access functions
+- [x] Add SQLite schema: `towers` table (id, name, params JSON, geotiff BLOB, created_at, updated_at)
+- [x] Add SQLite schema: `tasks` table (id, tower_id, status, error, created_at)
+- [x] Create `app/db/` module with schema init and access functions
 - [ ] Rewrite `run_splat` to persist results to SQLite instead of Redis
 - [ ] Rewrite `/predict` to create task row in SQLite
 - [ ] Rewrite `/status/{task_id}` to read from SQLite
@@ -62,17 +62,29 @@
 
 ## 7. Hardware & environment presets
 
-- [ ] Create `src/presets/hardware.ts` with Heltec V3, Heltec V4, custom specs (power, gain)
-- [ ] Create `src/presets/frequencies.ts` keyed by country code (Canada 907 MHz, US 915 MHz, EU 868 MHz, etc.)
-- [ ] Create `src/presets/antennas.ts` with curated antenna gain list
-- [ ] Create `src/presets/heights.ts` mapping labels to meters (ground: 1m, first floor window: 3m, second floor window: 6m, gutter line: 8m, rooftop: 10m, ground tower: 30m, roof tower: 15m)
+- [x] Create `src/presets/hardware.ts` with Heltec V3 (max 22 dBm / 158 mW, SX1262), Heltec V4 (max 22 dBm / 158 mW, SX1262), custom (all fields unlocked)
+- [x] Create `src/presets/frequencies.ts` keyed by country code (Canada 907 MHz, US 915 MHz, EU 868 MHz, etc.)
+- [x] Create `src/presets/antennas.ts` with curated antenna list (name, gain dBi, SWR): Ribbed Spring Helical (0 dBi, 3.0), Duck Stubby (1 dBi, 3.5), Bingfu Whip (2.5 dBi, 1.8), Slinkdsco Omni (4 dBi, 1.1)
+- [ ] Calculate SWR mismatch loss: `loss_dB = -10 * log10(1 - ((SWR-1)/(SWR+1))²)` and subtract from TX power before sending to SPLAT!
+- [ ] Add SWR mismatch loss calculation to backend `app/services/splat.py` (apply to effective TX power)
+- [ ] Display computed mismatch loss in UI next to antenna selector (informational)
+- [x] Create `src/presets/heights.ts` mapping labels to meters (ground: 1m, first floor window: 3m, second floor window: 6m, gutter line: 8m, rooftop: 10m, ground tower: 30m, roof tower: 15m)
 - [ ] Add hardware selector dropdown to transmitter form
 - [ ] Add country/region selector that auto-fills frequency
 - [ ] Add antenna selector dropdown
 - [ ] Add height preset dropdown (with manual override)
 - [ ] Lock auto-filled fields in preset mode, unlock all in custom mode
 
-## 8. Meshcore tower path simulation
+## 8. Pre-cached client simulation matrix
+
+- [ ] Define simulation matrix: hardware (V3, V4) × antenna (4 options) = 8 combinations per tower site
+- [ ] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower location
+- [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + hardware + antenna
+- [ ] Add UI selector to switch between cached client configurations per tower (no re-simulation needed)
+- [ ] On tower creation, auto-queue the full matrix of simulations as background tasks
+- [ ] Show matrix completion progress in admin UI
+
+## 9. Meshcore tower path simulation
 
 - [ ] Add SPLAT! point-to-point analysis function in `app/services/splat.py`
 - [ ] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers
