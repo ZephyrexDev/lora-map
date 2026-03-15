@@ -1,13 +1,13 @@
 """Tests for the tower-paths API endpoints in app.main."""
 
-import pytest
-
-pytestmark = pytest.mark.slow
-
 from uuid import uuid4
+
+import pytest
 
 from app.db import db_connection
 from tests.conftest import insert_tower
+
+pytestmark = pytest.mark.slow
 
 
 class TestGetTowerPaths:

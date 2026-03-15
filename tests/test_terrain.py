@@ -1,9 +1,5 @@
 """Tests for app.services.terrain — terrain provider classes."""
 
-import pytest
-
-pytestmark = pytest.mark.slow
-
 import gzip
 import io
 
@@ -19,6 +15,8 @@ from app.services.terrain import (
     SrtmProvider,
     TerrainProvider,
 )
+
+pytestmark = pytest.mark.slow
 
 
 class TestTerrainProviderParseTileName:

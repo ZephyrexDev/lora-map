@@ -1,13 +1,13 @@
 """Tests for the FastAPI endpoints in app.main."""
 
-import pytest
-
-pytestmark = pytest.mark.slow
-
 from uuid import uuid4
+
+import pytest
 
 from app.db import db_connection
 from tests.conftest import insert_task, insert_tower, set_tower_geotiff
+
+pytestmark = pytest.mark.slow
 
 # ===========================================================================
 # POST /predict

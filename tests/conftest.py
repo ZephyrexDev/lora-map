@@ -39,7 +39,6 @@ import app.auth as auth_mod  # noqa: E402
 from app.db import db_connection, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Slow-test gating via --run-slow CLI flag
 # ---------------------------------------------------------------------------
@@ -55,6 +54,7 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
+
 
 # ---------------------------------------------------------------------------
 # Shared fixtures

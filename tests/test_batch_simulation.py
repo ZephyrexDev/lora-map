@@ -1,14 +1,14 @@
 """Tests for batch simulation backend (matrix-driven simulations)."""
 
-import pytest
-
-pytestmark = pytest.mark.slow
-
 from unittest.mock import patch
 from uuid import uuid4
 
+import pytest
+
 from app.db import db_connection
 from app.matrix import get_matrix_combinations, get_matrix_config
+
+pytestmark = pytest.mark.slow
 
 
 class TestPredictCreatesSimulations:

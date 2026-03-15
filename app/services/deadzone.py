@@ -12,6 +12,7 @@ import math
 
 import numpy as np
 import rasterio
+import rasterio.warp
 from rasterio.enums import Resampling
 from rasterio.transform import from_bounds
 from scipy.ndimage import binary_dilation, center_of_mass, label

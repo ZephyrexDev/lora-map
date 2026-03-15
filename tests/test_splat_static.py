@@ -2,9 +2,9 @@
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from app.services.splat import Splat
+
+pytestmark = pytest.mark.slow
 
 # ===========================================================================
 # _create_splat_qth

@@ -2,9 +2,9 @@
 
 import pytest
 
-pytestmark = pytest.mark.slow
-
 from tests.conftest import insert_task, insert_tower
+
+pytestmark = pytest.mark.slow
 
 AUTH_PASSWORD = "s3cret"
 
