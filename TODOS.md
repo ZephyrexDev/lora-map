@@ -93,15 +93,15 @@ Towers have fixed hardware/antenna/height configs set by admin. The matrix varie
 ### Admin matrix configuration
 - [x] Store enabled matrix members in SQLite settings table (or JSON column): `{"hardware": ["v3", "v4"], "antennas": ["bingfu_whip", "slinkdsco_omni"], "terrain": ["bare_earth", "lulc_clutter"]}`
 - [x] Add admin UI panel to toggle individual members on each axis (checkboxes per hardware, antenna, terrain model)
-- [ ] Changing the enabled set triggers delta computation: queue only the new combinations, don't re-run existing ones
-- [ ] Disabling a member hides it from the visitor selector but retains cached results (can be re-enabled without re-simulating)
+- [x] Changing the enabled set triggers delta computation: queue only the new combinations, don't re-run existing ones
+- [x] Disabling a member hides it from the visitor selector but retains cached results (can be re-enabled without re-simulating)
 
 ### Simulation & storage
 - [x] Matrix varies receiver gain, sensitivity, SWR mismatch loss, and terrain model — tower TX params stay fixed
 - [x] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower
 - [x] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna + terrain_model
 - [x] On tower creation, auto-queue the enabled matrix combinations as background tasks
-- [ ] Show matrix completion progress in admin UI (e.g., "8/12 simulations complete")
+- [x] Show matrix completion progress in admin UI (e.g., "4/8" badge, polls every 5s while pending)
 
 ### Visitor UI
 - [x] Add selectors for visitors to pick their client hardware + antenna + terrain model — only enabled options shown

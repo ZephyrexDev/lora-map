@@ -93,7 +93,7 @@ async function onSelectionChange() {
   for (const site of store.localSites) {
     if (!site.taskId) continue;
     try {
-      const response = await fetch(`/towers/${site.taskId}/simulations`);
+      const response = await fetch(`/towers/${site.taskId}/simulations?enabled_only=true`);
       if (!response.ok) continue;
       const simulations = await response.json();
 

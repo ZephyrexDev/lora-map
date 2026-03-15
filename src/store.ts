@@ -5,7 +5,7 @@ import L from 'leaflet';
 import GeoRasterLayer from 'georaster-layer-for-leaflet';
 import parseGeoraster from 'georaster';
 import 'leaflet-easyprint';
-import { type Site, type SplatParams } from './types.ts';
+import { type Site, type SplatParams, type MatrixConfig } from './types.ts';
 import { cloneObject } from './utils.ts';
 import { redPinMarker } from './layers.ts';
 import { createOverlapHatchLayer, type TowerInfo } from './layers/OverlapHatchLayer.ts';
@@ -34,6 +34,11 @@ const useStore = defineStore('store', {
       localSites: [] as Site[], //useLocalStorage('localSites', ),
       overlapLayer: undefined as undefined | L.GridLayer,
       simulationState: 'idle',
+      isAdmin: false,
+      adminToken: localStorage.getItem('adminToken') || '',
+      clientHardware: 'v3' as string,
+      clientAntenna: 'bingfu_whip' as string,
+      matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
@@ -75,6 +80,78 @@ const useStore = defineStore('store', {
     }
   },
   actions: {
+    async loadMatrixConfig(): Promise<void> {
+      try {
+        const response = await fetch('/matrix/config');
+        if (response.ok) {
+          this.matrixConfig = await response.json();
+        }
+      } catch (err) {
+        console.warn('Error loading matrix config:', err);
+      }
+    },
+    async login(password: string): Promise<boolean> {
+      try {
+        const response = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        if (!response.ok) return false;
+        const data = await response.json();
+        this.adminToken = data.token;
+        this.isAdmin = true;
+        localStorage.setItem('adminToken', this.adminToken);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    logout() {
+      this.adminToken = '';
+      this.isAdmin = false;
+      localStorage.removeItem('adminToken');
+    },
+    async checkAuth(): Promise<void> {
+      if (!this.adminToken) return;
+      try {
+        const response = await fetch('/auth/check', {
+          headers: { Authorization: `Bearer ${this.adminToken}` },
+        });
+        if (response.ok) {
+          this.isAdmin = true;
+        } else {
+          this.adminToken = '';
+          this.isAdmin = false;
+          localStorage.removeItem('adminToken');
+        }
+      } catch {
+        this.adminToken = '';
+        this.isAdmin = false;
+        localStorage.removeItem('adminToken');
+      }
+    },
+    async swapSimulationLayer(towerId: string, simId: string): Promise<void> {
+      try {
+        const resultResponse = await fetch(`/simulations/${simId}/result`);
+        if (!resultResponse.ok) {
+          console.warn('Failed to fetch simulation result:', resultResponse.statusText);
+          return;
+        }
+        const arrayBuffer = await resultResponse.arrayBuffer();
+        const geoRaster = await parseGeoraster(arrayBuffer);
+        const site = this.localSites.find((s: Site) => s.taskId === towerId);
+        if (!site) {
+          console.warn('No site found for tower:', towerId);
+          return;
+        }
+        site.raster = geoRaster;
+        this.redrawSites();
+        this.updateOverlapLayer();
+      } catch (err) {
+        console.warn('Error swapping simulation layer:', err);
+      }
+    },
     setTxCoords(lat: number, lon: number) {
       this.splatParams.transmitter.tx_lat = lat
       this.splatParams.transmitter.tx_lon = lon

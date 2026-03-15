@@ -86,14 +86,25 @@ const config = reactive<MatrixConfig>({
   terrain: { bare_earth: true },
 });
 
+function arrayToRecord(arr: string[], allKeys: string[]): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  for (const key of allKeys) {
+    result[key] = arr.includes(key);
+  }
+  return result;
+}
+
 onMounted(async () => {
   try {
     const response = await fetch("/matrix/config");
     if (response.ok) {
       const data = await response.json();
-      if (data.hardware) Object.assign(config.hardware, data.hardware);
-      if (data.antennas) Object.assign(config.antennas, data.antennas);
-      if (data.terrain) Object.assign(config.terrain, data.terrain);
+      const hwKeys = hardwareOptions.map((o) => o.key);
+      const antKeys = antennaOptions.map((o) => o.key);
+      const terKeys = terrainOptions.map((o) => o.key);
+      if (data.hardware) Object.assign(config.hardware, arrayToRecord(data.hardware, hwKeys));
+      if (data.antennas) Object.assign(config.antennas, arrayToRecord(data.antennas, antKeys));
+      if (data.terrain) Object.assign(config.terrain, arrayToRecord(data.terrain, terKeys));
       store.matrixConfig = { ...config };
     }
   } catch (err) {
@@ -112,7 +123,11 @@ async function toggle(section: keyof MatrixConfig, key: string) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${store.adminToken}`,
       },
-      body: JSON.stringify(config),
+      body: JSON.stringify({
+        hardware: Object.entries(config.hardware).filter(([, v]) => v).map(([k]) => k),
+        antennas: Object.entries(config.antennas).filter(([, v]) => v).map(([k]) => k),
+        terrain: Object.entries(config.terrain).filter(([, v]) => v).map(([k]) => k),
+      }),
     });
     if (response.ok) {
       store.matrixConfig = { ...config };
