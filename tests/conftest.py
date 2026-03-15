@@ -1,43 +1,50 @@
-"""Shared pytest configuration and fixtures for all backend tests.
-
-Sets SPLAT_PATH and DB_PATH environment variables before any app modules
-are imported, so the real SPLAT! binaries are used (no mocks) and the
-database points to a temporary file.
-"""
+"""Shared pytest configuration and fixtures for all backend tests."""
 
 import json
 import os
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+from fastapi.testclient import TestClient
+
+import app.auth as auth_mod
+import app.main as main_mod
+from app.db import db_connection, init_db
+from app.main import app
+
 # ---------------------------------------------------------------------------
-# Environment setup — must happen before any app imports
+# Environment setup
 # ---------------------------------------------------------------------------
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Point to the locally-built SPLAT! binaries
 _splat_bin_dir = _PROJECT_ROOT / "splat" / "bin"
 if _splat_bin_dir.is_dir():
     os.environ.setdefault("SPLAT_PATH", str(_splat_bin_dir))
 
-# Use a temporary database for tests
 _tmp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)  # noqa: SIM115
 _tmp_db_path = _tmp_db.name
 _tmp_db.close()
 os.environ["DB_PATH"] = _tmp_db_path
 
 # ---------------------------------------------------------------------------
-# Imports that depend on environment setup above
+# Ensure splat_service is set for tests (lazy init normally happens in lifespan)
 # ---------------------------------------------------------------------------
 
-import pytest  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+if main_mod.splat_service is None:
+    splat_path = os.environ.get("SPLAT_PATH")
+    if splat_path and Path(splat_path).is_dir():
+        try:
+            from app.services.splat import Splat
 
-import app.auth as auth_mod  # noqa: E402
-from app.db import db_connection, init_db  # noqa: E402
-from app.main import app  # noqa: E402
+            main_mod.splat_service = Splat(splat_path=splat_path)
+        except FileNotFoundError:
+            main_mod.splat_service = MagicMock()
+    else:
+        main_mod.splat_service = MagicMock()
 
 # ---------------------------------------------------------------------------
 # Slow-test gating via --run-slow CLI flag
@@ -78,21 +85,26 @@ def _reset_db():
 @pytest.fixture()
 def client():
     """FastAPI TestClient with auth disabled."""
-    original = auth_mod.ADMIN_PASSWORD
-    auth_mod.ADMIN_PASSWORD = None
+    orig = os.environ.pop("ADMIN_PASSWORD", None)
     with TestClient(app) as c:
         yield c
-    auth_mod.ADMIN_PASSWORD = original
+    if orig is not None:
+        os.environ["ADMIN_PASSWORD"] = orig
 
 
 @pytest.fixture()
 def client_with_auth():
-    """FastAPI TestClient with auth enabled (password = 's3cret')."""
-    original = auth_mod.ADMIN_PASSWORD
-    auth_mod.ADMIN_PASSWORD = "s3cret"
-    auth_mod._login_attempts.clear()
+    """FastAPI TestClient with auth enabled (password = 's3cret').
+
+    Also clears any active session tokens and rate-limit state.
+    """
+    os.environ["ADMIN_PASSWORD"] = "s3cret"
+    with auth_mod._token_lock:
+        auth_mod._active_tokens.clear()
+    with auth_mod._rate_lock:
+        auth_mod._login_attempts.clear()
     yield TestClient(app)
-    auth_mod.ADMIN_PASSWORD = original
+    del os.environ["ADMIN_PASSWORD"]
 
 
 @pytest.fixture()

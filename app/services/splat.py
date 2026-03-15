@@ -89,7 +89,7 @@ class Splat:
         }
 
         logger.info(
-            f"Initialized SPLAT! with terrain tile cache at '{cache_dir}' with a size limit of {cache_size_gb} GB."
+            "Initialized SPLAT! with terrain tile cache at '%s' with a size limit of %s GB.", cache_dir, cache_size_gb
         )
 
     @staticmethod
@@ -113,18 +113,19 @@ class Splat:
         Raises:
             RuntimeError: If SPLAT! fails to execute.
         """
-        logger.debug(f"Coverage prediction request: {request.model_dump_json()}")
+        logger.debug("Coverage prediction request: %s", request.model_dump_json())
+
+        # Work on a copy to avoid mutating the caller's model
+        request = request.model_copy(update={"high_resolution": False})
 
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
-                logger.debug(f"Temporary directory created: {tmpdir}")
-
-                request.high_resolution = False
+                logger.debug("Temporary directory created: %s", tmpdir)
 
                 # Set hard limit of 100 km radius
                 if request.radius > 100000:
-                    logger.debug(f"User tried to set radius of {request.radius} meters, setting to 100 km.")
-                    request.radius = 100000
+                    logger.debug("User tried to set radius of %s meters, setting to 100 km.", request.radius)
+                    request = request.model_copy(update={"radius": 100000})
 
                 # determine the required terrain tiles
                 required_tiles = Splat._calculate_required_terrain_tiles(request.lat, request.lon, request.radius)
@@ -182,7 +183,7 @@ class Splat:
                         )
                     )
 
-                logger.debug(f"Contents of {tmpdir}: {list(Path(tmpdir).iterdir())}")
+                logger.debug("Contents of %s: %s", tmpdir, list(Path(tmpdir).iterdir()))
 
                 splat_command = [
                     (self.splat_hd_binary if request.high_resolution else self.splat_binary),
@@ -206,7 +207,7 @@ class Splat:
                     "-kml",
                     "-olditm",
                 ]  # flag "olditm" uses the standard ITM model instead of ITWOM, which has produced unrealistic results.
-                logger.debug(f"Executing SPLAT! command: {' '.join(splat_command)}")
+                logger.debug("Executing SPLAT! command: %s", " ".join(splat_command))
 
                 splat_result = subprocess.run(
                     splat_command,
@@ -214,13 +215,14 @@ class Splat:
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=600,
                 )
 
-                logger.debug(f"SPLAT! stdout:\n{splat_result.stdout}")
-                logger.debug(f"SPLAT! stderr:\n{splat_result.stderr}")
+                logger.debug("SPLAT! stdout:\n%s", splat_result.stdout)
+                logger.debug("SPLAT! stderr:\n%s", splat_result.stderr)
 
                 if splat_result.returncode != 0:
-                    logger.error(f"SPLAT! execution failed with return code {splat_result.returncode}")
+                    logger.error("SPLAT! execution failed with return code %s", splat_result.returncode)
                     raise RuntimeError(
                         f"SPLAT! execution failed with return code {splat_result.returncode}\n"
                         f"Stdout: {splat_result.stdout}\nStderr: {splat_result.stderr}"
@@ -244,7 +246,7 @@ class Splat:
                 return geotiff_data
 
             except Exception as e:
-                logger.error(f"Error during coverage prediction: {e}")
+                logger.error("Error during coverage prediction: %s", e)
                 raise RuntimeError(f"Error during coverage prediction: {e}") from e
 
     @staticmethod
@@ -331,7 +333,7 @@ class Splat:
         Returns:
             bytes: The content of the .qth file formatted for SPLAT!.
         """
-        logger.debug(f"Generating .qth file content for site '{name}'.")
+        logger.debug("Generating .qth file content for site '%s'.", name)
 
         try:
             # Create the .qth file content
@@ -342,10 +344,10 @@ class Splat:
                 f"{abs(longitude) if longitude < 0 else 360 - longitude:.6f}\n"
                 f"{elevation:.2f}\n"
             )
-            logger.debug(f"Generated .qth file contents:\n{contents}")
+            logger.debug("Generated .qth file contents:\n%s", contents)
             return contents.encode("utf-8")  # Return as bytes
         except Exception as e:
-            logger.error(f"Error generating .qth file content: {e}")
+            logger.error("Error generating .qth file content: %s", e)
             raise ValueError(f"Failed to generate .qth content: {e}") from e
 
     @staticmethod
@@ -406,8 +408,11 @@ class Splat:
         # Calculate ERP in Watts
         erp_watts = 10 ** ((tx_power + tx_gain - system_loss - 30) / 10)
         logger.debug(
-            f"Calculated ERP in Watts: {erp_watts:.2f} "
-            f"(tx_power={tx_power}, tx_gain={tx_gain}, system_loss={system_loss})"
+            "Calculated ERP in Watts: %.2f (tx_power=%s, tx_gain=%s, system_loss=%s)",
+            erp_watts,
+            tx_power,
+            tx_gain,
+            system_loss,
         )
 
         # Generate the content, maintaining the SPLAT! format
@@ -423,10 +428,10 @@ class Splat:
                 f"{time_fraction / 100.0:.2f}  ; Fraction of time\n"
                 f"{erp_watts:.2f}  ; ERP in Watts\n"
             )
-            logger.debug(f"Generated .lrp file contents:\n{contents}")
+            logger.debug("Generated .lrp file contents:\n%s", contents)
             return contents.encode("utf-8")  # Return as bytes
         except Exception as e:
-            logger.error(f"Error generating .lrp file content: {e}")
+            logger.error("Error generating .lrp file content: %s", e)
             raise
 
     @staticmethod
@@ -452,7 +457,10 @@ class Splat:
             bytes: The content of the .dcf file formatted for SPLAT!.
         """
         logger.debug(
-            f"Generating .dcf file content using colormap '{colormap_name}', min_dbm={min_dbm}, max_dbm={max_dbm}."
+            "Generating .dcf file content using colormap '%s', min_dbm=%s, max_dbm=%s.",
+            colormap_name,
+            min_dbm,
+            max_dbm,
         )
 
         try:
@@ -466,11 +474,11 @@ class Splat:
             for value, rgb in zip(cmap_values, rgb_colors[::-1], strict=True):
                 contents += f"{int(value):+4d}: {rgb[0]:3d}, {rgb[1]:3d}, {rgb[2]:3d}\n"
 
-            logger.debug(f"Generated .dcf file contents:\n{contents}")
+            logger.debug("Generated .dcf file contents:\n%s", contents)
             return contents.encode("utf-8")
 
         except Exception as e:
-            logger.error(f"Error generating .dcf file content: {e}")
+            logger.error("Error generating .dcf file content: %s", e)
             raise ValueError(f"Failed to generate .dcf content: {e}") from e
 
     @staticmethod
@@ -583,7 +591,6 @@ class Splat:
         colormap_name: str,
         min_dbm: float,
         max_dbm: float,
-        null_value: int = 255,  # kept for API compat, unused in new path
     ) -> bytes:
         """
         Generate a single-band float32 GeoTIFF containing dBm signal strength
@@ -599,7 +606,6 @@ class Splat:
             colormap_name: Matplotlib colormap name used when generating the DCF.
             min_dbm: Minimum dBm value used in the DCF / colormap.
             max_dbm: Maximum dBm value used in the DCF / colormap.
-            null_value: (Unused, kept for backward compatibility.)
 
         Returns:
             bytes: The binary content of the resulting GeoTIFF file.
@@ -621,14 +627,14 @@ class Splat:
             east = float(box.find("kml:east", namespace).text)
             west = float(box.find("kml:west", namespace).text)
 
-            logger.debug(f"Extracted bounding box: north={north}, south={south}, east={east}, west={west}")
+            logger.debug("Extracted bounding box: north=%s, south=%s, east=%s, west=%s", north, south, east, west)
 
             # Read PPM content as RGB (not grayscale — we need colors for reverse mapping)
             logger.debug("Reading PPM content as RGB.")
             with Image.open(io.BytesIO(ppm_bytes)) as img:
                 img_rgb = np.array(img.convert("RGB"))  # (H, W, 3) uint8
 
-            logger.debug(f"PPM image dimensions: {img_rgb.shape}")
+            logger.debug("PPM image dimensions: %s", img_rgb.shape)
 
             # Reverse-map PPM pixel colors to dBm values
             dbm_array = Splat._reverse_map_ppm_to_dbm(img_rgb, colormap_name, min_dbm, max_dbm)
@@ -636,7 +642,7 @@ class Splat:
             # Create GeoTIFF using Rasterio
             height, width = dbm_array.shape
             transform = from_bounds(west, south, east, north, width, height)
-            logger.debug(f"GeoTIFF transform matrix: {transform}")
+            logger.debug("GeoTIFF transform matrix: %s", transform)
 
             # Write single-band float32 GeoTIFF to memory
             with io.BytesIO() as buffer:
@@ -662,7 +668,7 @@ class Splat:
             return geotiff_bytes
 
         except Exception as e:
-            logger.error(f"Error during GeoTIFF generation: {e}")
+            logger.error("Error during GeoTIFF generation: %s", e)
             raise RuntimeError(f"Error during GeoTIFF generation: {e}") from e
 
     @staticmethod
@@ -701,7 +707,7 @@ class Splat:
 
         # Check cache for converted file
         if sdf_filename in self.tile_cache:
-            logger.info(f"Cache hit: {sdf_filename} found in the local cache.")
+            logger.info("Cache hit: %s found in the local cache.", sdf_filename)
             return self.tile_cache[sdf_filename]
 
         # Create temporary working directory
@@ -709,14 +715,14 @@ class Splat:
             try:
                 # Decompress the tile into the temporary directory
                 hgt_path = Path(tmpdir) / tile_name.replace(".gz", "")
-                logger.info(f"Decompressing {tile_name} into {hgt_path}.")
+                logger.info("Decompressing %s into %s.", tile_name, hgt_path)
                 with gzip.GzipFile(fileobj=io.BytesIO(tile)) as gz_file, open(hgt_path, "wb") as hgt_file:
                     hgt_file.write(gz_file.read())
 
                 # Downsample to 3-arcsecond resolution if not in high-resolution mode
                 if not high_resolution:
                     try:
-                        logger.info(f"Downsampling {hgt_path} to 3-arcsecond resolution.")
+                        logger.info("Downsampling %s to 3-arcsecond resolution.", hgt_path)
                         with rasterio.open(hgt_path) as src:
                             # Apply a scaling factor to transform for 3-arcsecond resolution
                             scale_factor = 3  # 3-arcsecond is 3 times coarser than 1-arcsecond
@@ -747,14 +753,14 @@ class Splat:
                         with rasterio.open(hgt_path, "w", **meta) as dst:
                             dst.write(data)
 
-                        logger.info(f"Successfully downsampled {hgt_path}.")
+                        logger.info("Successfully downsampled %s.", hgt_path)
                     except Exception as e:
-                        logger.error(f"Failed to downsample {hgt_path}: {e}")
+                        logger.error("Failed to downsample %s: %s", hgt_path, e)
                         raise RuntimeError(f"Downsampling error for {hgt_path}: {e}") from e
 
                 # Call srtm2sdf or srtm2sdf-hd in the temporary directory
                 cmd = self.srtm2sdf_hd_binary if high_resolution else self.srtm2sdf_binary
-                logger.info(f"Converting {hgt_path} to {sdf_filename} using {cmd}.")
+                logger.info("Converting %s to %s using %s.", hgt_path, sdf_filename, cmd)
                 result = subprocess.run(
                     [cmd, Path(tile_name.replace(".gz", "")).name],
                     cwd=tmpdir,
@@ -763,12 +769,12 @@ class Splat:
                     check=True,
                 )
 
-                logger.debug(f"srtm2sdf output:\n{result.stderr}")
+                logger.debug("srtm2sdf output:\n%s", result.stderr)
                 sdf_path = Path(tmpdir) / sdf_filename
 
                 # Ensure the .sdf file was created
                 if not sdf_path.exists():
-                    logger.error(f"Expected .sdf file not found: {sdf_path}")
+                    logger.error("Expected .sdf file not found: %s", sdf_path)
                     raise RuntimeError(f"Failed to generate .sdf file: {sdf_path}")
 
                 # Read and cache the .sdf file
@@ -776,16 +782,16 @@ class Splat:
                     sdf_data = sdf_file.read()
                 self.tile_cache[sdf_filename] = sdf_data
 
-                logger.info(f"Successfully converted and cached {sdf_filename}.")
+                logger.info("Successfully converted and cached %s.", sdf_filename)
                 return sdf_data
 
             except subprocess.CalledProcessError as e:
-                logger.error(f"Subprocess error during conversion of {tile_name}: {e}")
-                logger.error(f"stderr: {e.stderr}")
+                logger.error("Subprocess error during conversion of %s: %s", tile_name, e)
+                logger.error("stderr: %s", e.stderr)
                 raise RuntimeError(f"Subprocess error during conversion of {tile_name}: {e}") from e
 
             except Exception as e:
-                logger.error(f"Error during conversion of {tile_name} to {sdf_filename}: {e}")
+                logger.error("Error during conversion of %s to %s: %s", tile_name, sdf_filename, e)
                 raise RuntimeError(f"Conversion error for {tile_name}: {e}") from e
 
     def point_to_point(
@@ -901,6 +907,7 @@ class Splat:
                     capture_output=True,
                     text=True,
                     check=False,
+                    timeout=300,
                 )
 
                 logger.debug("SPLAT! P2P stdout:\n%s", result.stdout)
@@ -1021,8 +1028,8 @@ if __name__ == "__main__":
         output_path = "splat_output.tif"
         with open(output_path, "wb") as output_file:
             output_file.write(result)
-        logger.info(f"GeoTIFF saved to: {output_path}")
+        logger.info("GeoTIFF saved to: %s", output_path)
 
     except Exception as e:
-        logger.error(f"Error during SPLAT! test: {e}")
+        logger.error("Error during SPLAT! test: %s", e)
         raise

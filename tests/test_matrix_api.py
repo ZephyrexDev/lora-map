@@ -55,6 +55,10 @@ class TestPutMatrixConfig:
         assert resp.status_code == 401
 
     def test_admin_auth_succeeds_with_token(self, client_with_auth):
+        # Obtain a session token via login
+        login_resp = client_with_auth.post("/auth/login", json={"password": "s3cret"})
+        token = login_resp.json()["token"]
+
         payload = {
             "hardware": ["v3"],
             "antennas": ["bingfu_whip"],
@@ -63,7 +67,7 @@ class TestPutMatrixConfig:
         resp = client_with_auth.put(
             "/matrix/config",
             json=payload,
-            headers={"Authorization": "Bearer s3cret"},
+            headers={"Authorization": f"Bearer {token}"},
         )
         assert resp.status_code == 200
 

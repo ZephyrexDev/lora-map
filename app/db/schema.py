@@ -67,17 +67,35 @@ CREATE TABLE IF NOT EXISTS simulations (
 );
 """
 
-ALL_SCHEMAS: list[str] = [
-    SCHEMA_TOWERS,
-    SCHEMA_TASKS,
-    SCHEMA_TOWER_PATHS,
-    SCHEMA_SETTINGS,
-    SCHEMA_SIMULATIONS,
+SCHEMA_VERSION: str = """\
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
+# Ordered list of (version, DDL statements).  Each entry is applied at most once.
+# To add a migration, append a new tuple with the next version number.
+MIGRATIONS: list[tuple[int, list[str]]] = [
+    (
+        1,
+        [
+            SCHEMA_TOWERS,
+            SCHEMA_TASKS,
+            SCHEMA_TOWER_PATHS,
+            SCHEMA_SETTINGS,
+            SCHEMA_SIMULATIONS,
+        ],
+    ),
 ]
 
 
 def init_db(db_path: str | Path) -> None:
-    """Create the database file (if needed) and apply all schema migrations.
+    """Create the database file (if needed) and apply all pending schema migrations.
+
+    Each migration is applied inside a single transaction and its version
+    number is recorded in the ``schema_version`` table so it is never
+    re-applied.
 
     Parameters
     ----------
@@ -90,8 +108,19 @@ def init_db(db_path: str | Path) -> None:
     logger.info("Initializing database at %s", db_path)
 
     with db_connection(str(db_path)) as conn:
-        for schema in ALL_SCHEMAS:
-            conn.executescript(schema)
+        # Bootstrap the version-tracking table (always safe to re-run)
+        conn.execute(SCHEMA_VERSION)
+
+        current = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_version").fetchone()[0]
+        logger.info("Current schema version: %s", current)
+
+        for version, statements in MIGRATIONS:
+            if version <= current:
+                continue
+            for stmt in statements:
+                conn.execute(stmt)
+            conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
+            logger.info("Applied schema migration v%s", version)
 
         conn.commit()
-        logger.info("Database schema applied successfully")
+        logger.info("Database schema up to date")

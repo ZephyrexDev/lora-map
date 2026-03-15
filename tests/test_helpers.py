@@ -99,7 +99,7 @@ class TestDeleteRow:
         from app.main import _delete_row
 
         with pytest.raises(HTTPException) as exc_info:
-            _delete_row("towers", "id", str(uuid4()), "Tower")
+            _delete_row("towers", str(uuid4()), "Tower")
         assert exc_info.value.status_code == 404
 
     def test_returns_delete_response_on_success(self, client):
@@ -107,6 +107,6 @@ class TestDeleteRow:
         from app.models.responses import DeleteResponse
 
         tid = insert_tower()
-        result = _delete_row("towers", "id", tid, "Tower")
+        result = _delete_row("towers", tid, "Tower")
         assert isinstance(result, DeleteResponse)
         assert result.id == tid

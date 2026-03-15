@@ -7,7 +7,9 @@ using the ITM (Irregular Terrain Model) via SPLAT! (https://github.com/jmcmellen
 Data is persisted to a local SQLite database.
 """
 
+import asyncio
 import dataclasses
+import hashlib
 import io
 import json
 import logging
@@ -63,20 +65,43 @@ from app.services.splat import Splat
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-splat_service = Splat(splat_path=os.environ.get("SPLAT_PATH", "/app/splat"))
+# Lazy-initialized in lifespan — avoids import-time FileNotFoundError and
+# makes testing easier (no need to mock at module level).
+splat_service: Splat | None = None
+
+# Semaphore limiting concurrent SPLAT! background tasks to avoid OOM / CPU starvation.
+_SPLAT_MAX_CONCURRENT = int(os.environ.get("SPLAT_MAX_CONCURRENT", "3"))
+_splat_semaphore = asyncio.Semaphore(_SPLAT_MAX_CONCURRENT)
+
+# Allowlist for _delete_row to prevent SQL injection via table/column names.
+_DELETABLE_TABLES: dict[str, str] = {
+    "towers": "id",
+    "tower_paths": "id",
+}
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    """Initialize the SQLite database on startup."""
+    """Initialize the SQLite database and SPLAT! service on startup."""
+    global splat_service
     db_path = os.environ.get("DB_PATH", DEFAULT_DB_PATH)
     init_db(db_path)
     logger.info("Database initialized at %s.", db_path)
+
+    splat_service = Splat(splat_path=os.environ.get("SPLAT_PATH", "/app/splat"))
+    logger.info("SPLAT! service initialized.")
     yield
 
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
+
+
+def _get_splat() -> Splat:
+    """Return the SPLAT! service, raising if not yet initialized."""
+    if splat_service is None:
+        raise RuntimeError("SPLAT! service not initialized — app lifespan has not started")
+    return splat_service
 
 
 # ---------------------------------------------------------------------------
@@ -102,8 +127,15 @@ def _geotiff_response_or_status(
     return TaskStatusResponse(id=resource_id, status=status, error=error if status == "failed" else None)
 
 
-def _delete_row(table: str, id_column: str, row_id: str, label: str) -> DeleteResponse:
-    """Delete a row by ID, raising HTTPException(404) if not found."""
+def _delete_row(table: str, row_id: str, label: str) -> DeleteResponse:
+    """Delete a row by ID, raising HTTPException(404) if not found.
+
+    Only tables registered in ``_DELETABLE_TABLES`` are accepted.
+    """
+    if table not in _DELETABLE_TABLES:
+        raise ValueError(f"Table '{table}' is not in the deletion allowlist")
+    id_column = _DELETABLE_TABLES[table]
+
     with db_connection() as conn:
         cursor = conn.execute(f"DELETE FROM {table} WHERE {id_column} = ?", (row_id,))  # noqa: S608
         conn.commit()
@@ -129,14 +161,22 @@ def _run_simulation_task(
 
 
 def _get_tower_location(conn: sqlite3.Connection, tower_id: str) -> TowerLocation | None:
-    """Return location fields for a tower, or None if not found."""
+    """Return location fields for a tower, or None if not found.
+
+    Raises ``ValueError`` if the tower's params JSON is missing required location fields.
+    """
     row = conn.execute("SELECT params FROM towers WHERE id = ?", (tower_id,)).fetchone()
     if row is None:
         return None
     params = json.loads(row["params"])
+
+    for required in ("lat", "lon"):
+        if required not in params:
+            raise ValueError(f"Tower {tower_id} is missing required param '{required}'")
+
     return TowerLocation(
-        lat=params.get("lat", 0),
-        lon=params.get("lon", 0),
+        lat=params["lat"],
+        lon=params["lon"],
         tx_height=params.get("tx_height", 1),
         frequency_mhz=params.get("frequency_mhz", 905.0),
     )
@@ -149,10 +189,11 @@ def _get_tower_location(conn: sqlite3.Connection, tower_id: str) -> TowerLocatio
 
 def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -> None:
     """Execute the SPLAT! coverage prediction and persist results to SQLite."""
+    svc = _get_splat()
 
     def execute() -> bytes:
         logger.info("Starting SPLAT! coverage prediction for task %s.", task_id)
-        return splat_service.coverage_prediction(request)
+        return svc.coverage_prediction(request)
 
     def on_success(geotiff_data: bytes) -> None:
         with db_connection() as conn:
@@ -176,6 +217,8 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
     Each pending simulation row is processed independently — a failure in one
     does not prevent the others from completing.
     """
+    svc = _get_splat()
+
     with db_connection() as conn:
         rows = conn.execute(
             "SELECT id, client_hardware, client_antenna, terrain_model "
@@ -196,7 +239,7 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
                 overrides["rx_gain"] = ant_params["rx_gain"]
             if "swr" in ant_params:
                 overrides["swr"] = ant_params["swr"]
-            return splat_service.coverage_prediction(payload.model_copy(update=overrides))
+            return svc.coverage_prediction(payload.model_copy(update=overrides))
 
         def on_success(geotiff_data: bytes, sid: str = sim_id) -> None:
             with db_connection() as conn:
@@ -216,6 +259,7 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
 
 def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> None:
     """Run SPLAT! P2P analysis between two towers and store the result."""
+    svc = _get_splat()
     try:
         with db_connection() as conn:
             loc_a = _get_tower_location(conn, tower_a_id)
@@ -225,7 +269,7 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
             logger.warning("Tower not found for path %s, skipping.", path_id)
             return
 
-        result = splat_service.point_to_point(
+        result = svc.point_to_point(
             lat_a=loc_a.lat,
             lon_a=loc_a.lon,
             height_a=loc_a.tx_height,
@@ -311,7 +355,7 @@ async def predict(
 
         conn.commit()
 
-    _deadzone_cache.result = None
+    _deadzone_cache.invalidate()
 
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
     background_tasks.add_task(run_matrix_simulations, tower_id, payload)
@@ -389,8 +433,8 @@ async def list_towers() -> TowerListResponse:
 @app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)])
 async def delete_tower(tower_id: str) -> DeleteResponse:
     """Delete a tower and its associated tasks (via CASCADE)."""
-    result = _delete_row("towers", "id", tower_id, "Tower")
-    _deadzone_cache.result = None
+    result = _delete_row("towers", tower_id, "Tower")
+    _deadzone_cache.invalidate()
     return result
 
 
@@ -492,7 +536,7 @@ async def get_aggregate_simulation(
         aggregate_tiff = compute_weighted_aggregate(blobs["bare_earth"], blobs["dsm"], blobs["lulc_clutter"])
     except Exception as e:
         logger.error("Weighted aggregate computation failed for tower %s: %s", tower_id, e)
-        raise HTTPException(status_code=500, detail=f"Aggregate computation failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Aggregate computation failed") from e
 
     return StreamingResponse(
         io.BytesIO(aggregate_tiff),
@@ -552,6 +596,15 @@ async def compute_tower_paths(
     """Compute pairwise P2P paths between towers (async — returns 202 Accepted)."""
     with db_connection() as conn:
         if body and body.tower_ids:
+            # Validate that all requested tower IDs actually exist
+            placeholders = ",".join("?" for _ in body.tower_ids)
+            existing = conn.execute(
+                f"SELECT id FROM towers WHERE id IN ({placeholders})", body.tower_ids  # noqa: S608
+            ).fetchall()
+            existing_ids = {r["id"] for r in existing}
+            missing = [tid for tid in body.tower_ids if tid not in existing_ids]
+            if missing:
+                raise HTTPException(status_code=404, detail=f"Tower(s) not found: {', '.join(missing)}")
             tower_ids: list[str] = body.tower_ids
         else:
             rows = conn.execute("SELECT id FROM towers").fetchall()
@@ -623,7 +676,7 @@ async def list_tower_paths() -> TowerPathListResponse:
 @app.delete("/tower-paths/{path_id}", dependencies=[Depends(require_admin)])
 async def delete_tower_path(path_id: str) -> DeleteResponse:
     """Delete a specific tower path."""
-    return _delete_row("tower_paths", "id", path_id, "Path")
+    return _delete_row("tower_paths", path_id, "Path")
 
 
 # ---------------------------------------------------------------------------
@@ -635,11 +688,27 @@ async def delete_tower_path(path_id: str) -> DeleteResponse:
 class _DeadzoneCache:
     """In-memory cache for deadzone analysis results.
 
-    Invalidated in predict() and delete_tower() when the tower set changes.
+    Uses a content hash of the GeoTIFF blobs to detect actual data changes,
+    not just tower count.
     """
 
-    tower_count: int = 0
+    _content_hash: str = ""
     result: DeadzoneAnalysisResponse | None = None
+
+    def invalidate(self) -> None:
+        self._content_hash = ""
+        self.result = None
+
+    def is_valid_for(self, blobs: list[bytes]) -> bool:
+        """Return True if the cache matches the current blob set."""
+        if self.result is None:
+            return False
+        blob_hash = hashlib.sha256(b"".join(sorted(hashlib.sha256(b).digest() for b in blobs))).hexdigest()
+        return blob_hash == self._content_hash
+
+    def store(self, blobs: list[bytes], result: DeadzoneAnalysisResponse) -> None:
+        self._content_hash = hashlib.sha256(b"".join(sorted(hashlib.sha256(b).digest() for b in blobs))).hexdigest()
+        self.result = result
 
 
 _deadzone_cache = _DeadzoneCache()
@@ -661,18 +730,17 @@ async def get_deadzones() -> DeadzoneAnalysisResponse:
             detail="Deadzone analysis requires at least 2 completed tower simulations",
         )
 
-    if _deadzone_cache.result is not None and _deadzone_cache.tower_count == len(geotiff_blobs):
-        return _deadzone_cache.result
+    if _deadzone_cache.is_valid_for(geotiff_blobs):
+        return _deadzone_cache.result  # type: ignore[return-value]
 
     try:
         analyzer = DeadzoneAnalyzer(geotiff_blobs)
         result = analyzer.analyze()
-        _deadzone_cache.tower_count = len(geotiff_blobs)
-        _deadzone_cache.result = result
+        _deadzone_cache.store(geotiff_blobs, result)
         return result
     except Exception as e:
         logger.error("Deadzone analysis failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Deadzone analysis failed: {e!s}") from e
+        raise HTTPException(status_code=500, detail="Deadzone analysis failed") from e
 
 
 app.mount("/", StaticFiles(directory="app/ui", html=True), name="ui")

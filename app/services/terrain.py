@@ -239,7 +239,15 @@ class LulcClutterProvider(TerrainProvider):
             wc_bytes: bytes = obj["Body"].read()
         except ClientError as e:
             if e.response["Error"]["Code"] == "NoSuchKey":
-                logger.warning("ESA WorldCover tile not found for N%02d/W%03d, using zero clutter.", lat, lon)
+                ns = "N" if lat >= 0 else "S"
+                ew = "E" if lon >= 0 else "W"
+                logger.warning(
+                    "ESA WorldCover tile not found for %s%02d/%s%03d, using zero clutter.",
+                    ns,
+                    abs(lat),
+                    ew,
+                    abs(lon),
+                )
                 return np.zeros((target_size, target_size), dtype=np.float32)
             raise
 

@@ -3,7 +3,7 @@
 import sqlite3
 
 from app.db.schema import (
-    ALL_SCHEMAS,
+    MIGRATIONS,
     SCHEMA_TASKS,
     SCHEMA_TOWER_PATHS,
     SCHEMA_TOWERS,
@@ -32,9 +32,15 @@ class TestSchemaTowerPaths:
         assert "tower_b_id" in SCHEMA_TOWER_PATHS
 
 
-class TestAllSchemas:
-    def test_has_five_entries(self):
-        assert len(ALL_SCHEMAS) == 5
+class TestMigrations:
+    def test_has_at_least_one_migration(self):
+        assert len(MIGRATIONS) >= 1
+
+    def test_first_migration_creates_all_tables(self):
+        _version, statements = MIGRATIONS[0]
+        all_sql = " ".join(statements)
+        for table in ("towers", "tasks", "tower_paths", "settings", "simulations"):
+            assert table in all_sql
 
 
 class TestInitDb:
@@ -48,6 +54,19 @@ class TestInitDb:
         try:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
             tables = sorted(row[0] for row in cursor.fetchall())
-            assert tables == ["settings", "simulations", "tasks", "tower_paths", "towers"]
+            assert tables == ["schema_version", "settings", "simulations", "tasks", "tower_paths", "towers"]
+        finally:
+            conn.close()
+
+    def test_idempotent_init(self, tmp_path):
+        """Running init_db twice should not fail or duplicate migrations."""
+        db_file = tmp_path / "test.db"
+        init_db(db_file)
+        init_db(db_file)
+
+        conn = sqlite3.connect(str(db_file))
+        try:
+            versions = conn.execute("SELECT version FROM schema_version").fetchall()
+            assert len(versions) == len(MIGRATIONS)
         finally:
             conn.close()

@@ -1,11 +1,15 @@
 """Admin authentication for the Signal Coverage Prediction API.
 
-Provides a simple Bearer-token authentication scheme where the token is the
-ADMIN_PASSWORD environment variable itself.  When ADMIN_PASSWORD is not set
-(the default), authentication is disabled and all requests are allowed through.
+Uses Bearer-token authentication with opaque session tokens.  The admin
+password is read from the ``ADMIN_PASSWORD`` environment variable on each
+check so that rotations take effect without a restart.  When the variable
+is unset, authentication is disabled and all requests are allowed through.
 """
 
+import hmac
 import os
+import secrets
+import threading
 import time
 from typing import Annotated
 
@@ -14,27 +18,69 @@ from pydantic import BaseModel
 
 from app.models.responses import AuthCheckResponse, AuthTokenResponse
 
-ADMIN_PASSWORD: str | None = os.environ.get("ADMIN_PASSWORD")
+# ---------------------------------------------------------------------------
+# Session token store — maps opaque tokens to expiry timestamps.
+# Protected by a lock for thread safety.
+# ---------------------------------------------------------------------------
+_TOKEN_TTL_SECONDS = 86400  # 24 hours
+_token_lock = threading.Lock()
+_active_tokens: dict[str, float] = {}  # token -> expiry (monotonic)
 
-# Simple in-memory rate limiter for login attempts
+
+def _get_admin_password() -> str | None:
+    """Read the admin password from the environment on every call."""
+    return os.environ.get("ADMIN_PASSWORD")
+
+
+def _issue_token() -> str:
+    """Create a cryptographically random session token and store it."""
+    token = secrets.token_urlsafe(32)
+    expiry = time.monotonic() + _TOKEN_TTL_SECONDS
+    with _token_lock:
+        _active_tokens[token] = expiry
+    return token
+
+
+def _validate_token(token: str) -> bool:
+    """Return True if *token* is active and not expired, pruning stale entries."""
+    now = time.monotonic()
+    with _token_lock:
+        expiry = _active_tokens.get(token)
+        if expiry is None or now > expiry:
+            _active_tokens.pop(token, None)
+            return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter — thread-safe, bounded
+# ---------------------------------------------------------------------------
+_rate_lock = threading.Lock()
 _login_attempts: dict[str, list[float]] = {}
 _MAX_ATTEMPTS = 5
 _WINDOW_SECONDS = 60
+_MAX_TRACKED_IPS = 10_000
 
 
 def _check_rate_limit(client_ip: str) -> None:
     """Raise 429 if client_ip has exceeded _MAX_ATTEMPTS in the last _WINDOW_SECONDS."""
     now = time.monotonic()
-    attempts = _login_attempts.get(client_ip, [])
-    # Prune old attempts
-    attempts = [t for t in attempts if now - t < _WINDOW_SECONDS]
-    _login_attempts[client_ip] = attempts
+    with _rate_lock:
+        # Periodic sweep: if the dict has grown too large, prune all stale entries
+        if len(_login_attempts) > _MAX_TRACKED_IPS:
+            stale = [ip for ip, ts in _login_attempts.items() if all(now - t >= _WINDOW_SECONDS for t in ts)]
+            for ip in stale:
+                del _login_attempts[ip]
 
-    if len(attempts) >= _MAX_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+        attempts = _login_attempts.get(client_ip, [])
+        attempts = [t for t in attempts if now - t < _WINDOW_SECONDS]
 
-    attempts.append(now)
-    _login_attempts[client_ip] = attempts
+        if len(attempts) >= _MAX_ATTEMPTS:
+            _login_attempts[client_ip] = attempts
+            raise HTTPException(status_code=429, detail="Too many login attempts. Try again later.")
+
+        attempts.append(now)
+        _login_attempts[client_ip] = attempts
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -52,17 +98,20 @@ async def require_admin(
 
     * If ``ADMIN_PASSWORD`` is not set, every request is allowed (auth disabled).
     * If ``ADMIN_PASSWORD`` is set, the request must carry an ``Authorization``
-      header of the form ``Bearer <password>`` where ``<password>`` matches
-      ``ADMIN_PASSWORD``.
+      header of the form ``Bearer <token>`` where ``<token>`` is a valid
+      session token obtained via ``POST /auth/login``.
     """
-    if ADMIN_PASSWORD is None:
+    if _get_admin_password() is None:
         return
 
     if authorization is None:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
 
     parts = authorization.split(" ", maxsplit=1)
-    if len(parts) != 2 or parts[0] != "Bearer" or parts[1] != ADMIN_PASSWORD:
+    if len(parts) != 2 or parts[0] != "Bearer":
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if not _validate_token(parts[1]):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
@@ -77,22 +126,23 @@ class LoginRequest(BaseModel):
 
 @router.post("/login", response_model=AuthTokenResponse)
 async def login(body: LoginRequest, request: Request) -> AuthTokenResponse:
-    """Validate a password and return a token on success.
+    """Validate a password and return an opaque session token on success.
 
-    Returns ``{"token": "<password>"}`` when the password matches
-    ``ADMIN_PASSWORD``, or 401 otherwise.  If auth is disabled
-    (``ADMIN_PASSWORD`` unset), any password is accepted and an empty token
-    is returned.  Rate limited to 5 attempts per minute per IP.
+    If auth is disabled (``ADMIN_PASSWORD`` unset), any password is accepted
+    and an empty token is returned.  Rate limited to 5 attempts per minute per IP.
     """
-    if ADMIN_PASSWORD is None:
+    admin_password = _get_admin_password()
+
+    if admin_password is None:
         return AuthTokenResponse(token="")
 
     _check_rate_limit(request.client.host if request.client else "unknown")
 
-    if body.password != ADMIN_PASSWORD:
+    # Constant-time comparison to prevent timing side-channel attacks
+    if not hmac.compare_digest(body.password.encode(), admin_password.encode()):
         raise HTTPException(status_code=401, detail="Invalid password")
 
-    return AuthTokenResponse(token=body.password)
+    return AuthTokenResponse(token=_issue_token())
 
 
 @router.get("/check", response_model=AuthCheckResponse)

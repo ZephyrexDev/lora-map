@@ -9,6 +9,20 @@ pytestmark = pytest.mark.slow
 AUTH_PASSWORD = "s3cret"
 
 
+def _login_and_get_token(client) -> str:
+    """Login with the auth password and return the opaque session token."""
+    resp = client.post("/auth/login", json={"password": AUTH_PASSWORD})
+    assert resp.status_code == 200
+    token = resp.json()["token"]
+    assert token  # non-empty
+    return token
+
+
+def _auth_headers(client) -> dict[str, str]:
+    """Return Authorization headers with a valid session token."""
+    return {"Authorization": f"Bearer {_login_and_get_token(client)}"}
+
+
 # ===========================================================================
 # Auth disabled (ADMIN_PASSWORD unset)
 # ===========================================================================
@@ -66,20 +80,17 @@ class TestAuthEnabledRejectsUnauthenticated:
 
 
 class TestAuthEnabledWithValidToken:
-    def _headers(self):
-        return {"Authorization": f"Bearer {AUTH_PASSWORD}"}
-
     def test_post_predict_201(self, client_with_auth, valid_payload):
-        resp = client_with_auth.post("/predict", json=valid_payload, headers=self._headers())
+        resp = client_with_auth.post("/predict", json=valid_payload, headers=_auth_headers(client_with_auth))
         assert resp.status_code == 201
         assert "task_id" in resp.json()
 
     def test_delete_tower_200(self, client_with_auth):
         tid = insert_tower()
-        assert client_with_auth.delete(f"/towers/{tid}", headers=self._headers()).status_code == 200
+        assert client_with_auth.delete(f"/towers/{tid}", headers=_auth_headers(client_with_auth)).status_code == 200
 
     def test_auth_check_200(self, client_with_auth):
-        resp = client_with_auth.get("/auth/check", headers=self._headers())
+        resp = client_with_auth.get("/auth/check", headers=_auth_headers(client_with_auth))
         assert resp.json() == {"authenticated": True}
 
 
@@ -89,15 +100,24 @@ class TestAuthEnabledWithValidToken:
 
 
 class TestAuthLogin:
-    def test_correct_password_returns_token(self, client_with_auth):
+    def test_correct_password_returns_opaque_token(self, client_with_auth):
         resp = client_with_auth.post("/auth/login", json={"password": AUTH_PASSWORD})
-        assert resp.json() == {"token": AUTH_PASSWORD}
+        token = resp.json()["token"]
+        # Token should be non-empty and NOT the raw password
+        assert token
+        assert token != AUTH_PASSWORD
 
     def test_wrong_password_returns_401(self, client_with_auth):
         assert client_with_auth.post("/auth/login", json={"password": "wrong"}).status_code == 401
 
     def test_missing_password_returns_422(self, client_with_auth):
         assert client_with_auth.post("/auth/login", json={}).status_code == 422
+
+    def test_token_can_be_used_for_auth(self, client_with_auth):
+        """A token from login should work with require_admin."""
+        token = _login_and_get_token(client_with_auth)
+        resp = client_with_auth.get("/auth/check", headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 200
 
 
 # ===========================================================================
@@ -152,7 +172,7 @@ class TestMalformedAuthHeaders:
         [
             "Basic s3cret",  # wrong scheme
             "",  # empty
-            "Bearer  s3cret",  # extra space
+            "Bearer  s3cret",  # extra space (not a valid token)
             "Bearer",  # missing token
         ],
     )
