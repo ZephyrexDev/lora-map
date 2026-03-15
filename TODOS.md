@@ -3,22 +3,22 @@
 ## 1. Rebrand to generic LoRa
 
 - [x] Rename repo/package from `meshtastic-site-planner` to `lora-planner` (package.json `name` field)
-- [ ] Replace "Meshtastic" with "LoRa" in all UI text, page titles, and meta tags
+- [x] Replace "Meshtastic" with "LoRa" in all UI text, page titles, and meta tags
 - [ ] Replace Meshtastic logos/favicons in `public/` with generic branding
 - [x] Update `index.html` title and meta
 - [x] Remove `site.meshtastic.org` references from CORS config, comments, and deployment docs
-- [ ] Rename `randanimal` site names if they reference Meshtastic concepts
+- [x] Rename `randanimal` site names if they reference Meshtastic concepts (N/A — randanimal is generic)
 - [x] Update README.md
 
 ## 2. Podman + single-container migration
 
-- [ ] Rename `Dockerfile` → `Containerfile`
-- [ ] Remove nginx-proxy and acme-companion services from compose
-- [ ] Remove Redis service from compose
-- [ ] Rename `docker-compose.yml` → `compose.yml` with single `app` service + persistent volume
+- [x] Rename `Dockerfile` → `Containerfile`
+- [x] Remove nginx-proxy and acme-companion services from compose
+- [x] Remove Redis service from compose
+- [x] Rename `docker-compose.yml` → `compose.yml` with single `app` service + persistent volume
 - [ ] Update Containerfile to not install/configure Redis
 - [ ] Add `/data` volume mount for SQLite + terrain cache
-- [ ] Replace all `docker` references in code/comments with `podman`
+- [x] Replace all `docker` references in code/comments with `podman` (N/A — no docker refs outside renamed files)
 - [ ] Test `podman build` and `podman run` workflow end-to-end
 
 ## 3. Replace Redis with SQLite
