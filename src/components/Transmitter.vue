@@ -19,27 +19,76 @@
                 <div class="invalid-feedback">Please enter a valid longitude (-180 to 180).</div>
             </div>
         </div>
+
+        <!-- Preset selectors -->
+        <div class="row g-2 mt-2">
+            <div class="col-6">
+                <label for="hardwarePreset" class="form-label">Hardware</label>
+                <select v-model="selectedHardware" @change="onHardwareChange" class="form-select form-select-sm" id="hardwarePreset">
+                    <option :value="-1">Custom</option>
+                    <option v-for="(hw, idx) in HARDWARE_PRESETS" :key="idx" :value="idx">
+                        {{ hw.name }}{{ hw.is_custom ? '' : ` (${hw.max_power_dbm} dBm)` }}
+                    </option>
+                </select>
+            </div>
+            <div class="col-6">
+                <label for="regionPreset" class="form-label">Country / Region</label>
+                <select v-model="selectedRegion" @change="onRegionChange" class="form-select form-select-sm" id="regionPreset">
+                    <option :value="-1">Custom</option>
+                    <option v-for="(freq, idx) in FREQUENCY_PRESETS" :key="idx" :value="idx">
+                        {{ freq.region }} ({{ freq.code }}) — {{ freq.frequency_mhz }} MHz
+                    </option>
+                </select>
+            </div>
+        </div>
+        <div class="row g-2 mt-2">
+            <div class="col-6">
+                <label for="antennaPreset" class="form-label">Antenna</label>
+                <div class="d-flex align-items-center gap-1">
+                    <select v-model="selectedAntenna" @change="onAntennaChange" class="form-select form-select-sm flex-grow-1" id="antennaPreset">
+                        <option :value="-1">Custom</option>
+                        <option v-for="(ant, idx) in ANTENNA_PRESETS" :key="idx" :value="idx">
+                            {{ ant.name }} ({{ ant.gain_dbi }} dBi)
+                        </option>
+                    </select>
+                    <span v-if="mismatchLossBadge !== null" class="badge bg-warning text-dark" style="white-space: nowrap; font-size: 0.7rem;">
+                        (-{{ mismatchLossBadge }} dB)
+                    </span>
+                </div>
+            </div>
+            <div class="col-6">
+                <label for="heightPreset" class="form-label">Height Preset</label>
+                <select v-model="selectedHeight" @change="onHeightChange" class="form-select form-select-sm" id="heightPreset">
+                    <option :value="-1">Custom</option>
+                    <option v-for="(h, idx) in HEIGHT_PRESETS" :key="idx" :value="idx">
+                        {{ h.label }} ({{ h.height_m }} m)
+                    </option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Manual fields -->
         <div class="row g-2 mt-2">
             <div class="col-6">
                 <label for="tx_power" class="form-label">Power (W)</label>
-                <input v-model="transmitter.tx_power" type="number" class="form-control form-control-sm" id="tx_power" required min="0" step="0.1" data-bs-toggle="tooltip" title="Transmitter power in watts (>0)." />
+                <input v-model="transmitter.tx_power" type="number" class="form-control form-control-sm" id="tx_power" required min="0" step="0.1" data-bs-toggle="tooltip" title="Transmitter power in watts (>0)." :disabled="isHardwarePresetActive" />
                 <div class="invalid-feedback">Power must be a positive number.</div>
             </div>
             <div class="col-6">
                 <label for="frequency" class="form-label">Frequency (MHz)</label>
-                <input v-model="transmitter.tx_freq" type="number" class="form-control form-control-sm" id="tx_freq" required min="20" max="20000" step="0.1" data-bs-toggle="tooltip" title="Transmitter frequency in MHz (20 to 20,000)." />
+                <input v-model="transmitter.tx_freq" type="number" class="form-control form-control-sm" id="tx_freq" required min="20" max="20000" step="0.1" data-bs-toggle="tooltip" title="Transmitter frequency in MHz (20 to 20,000)." :disabled="isRegionPresetActive" />
                 <div class="invalid-feedback">Frequency must be a positive number.</div>
             </div>
         </div>
         <div class="row g-2 mt-2">
             <div class="col-6">
                 <label for="tx_height" class="form-label">Height AGL (m)</label>
-                <input v-model="transmitter.tx_height" type="number" class="form-control form-control-sm" id="tx_height" required min="1.0" step="0.1" data-bs-toggle="tooltip" title="Transmitter height above ground in meters (>= 1.0)." />
+                <input v-model="transmitter.tx_height" type="number" class="form-control form-control-sm" id="tx_height" required min="1.0" step="0.1" data-bs-toggle="tooltip" title="Transmitter height above ground in meters (>= 1.0)." :disabled="isHeightPresetActive" />
                 <div class="invalid-feedback">Height must be a positive number.</div>
             </div>
             <div class="col-6">
                 <label for="tx_gain" class="form-label">Antenna Gain (dB)</label>
-                <input v-model="transmitter.tx_gain" type="number" class="form-control form-control-sm" id="tx_gain" required min="0" step="0.1" />
+                <input v-model="transmitter.tx_gain" type="number" class="form-control form-control-sm" id="tx_gain" required min="0" step="0.1" :disabled="isAntennaPresetActive" />
                 <div class="invalid-feedback">Gain must be a positive number.</div>
             </div>
         </div>
@@ -56,10 +105,66 @@
     import L from 'leaflet';
     import * as bootstrap from 'bootstrap';
     import { useStore } from '../store.ts'
-    import { onMounted } from 'vue';
+    import { onMounted, ref, computed } from 'vue';
     import { redPinMarker } from '../layers.ts';
+    import { HARDWARE_PRESETS } from '../presets/hardware.ts';
+    import { FREQUENCY_PRESETS } from '../presets/frequencies.ts';
+    import { ANTENNA_PRESETS, mismatchLoss } from '../presets/antennas.ts';
+    import { HEIGHT_PRESETS } from '../presets/heights.ts';
+
     const store = useStore();
     const transmitter = store.splatParams.transmitter;
+
+    // Preset selection state (-1 means "Custom")
+    const selectedHardware = ref(-1);
+    const selectedRegion = ref(-1);
+    const selectedAntenna = ref(-1);
+    const selectedHeight = ref(-1);
+
+    const isHardwarePresetActive = computed(() => {
+        if (selectedHardware.value < 0) return false;
+        const preset = HARDWARE_PRESETS[selectedHardware.value];
+        return preset && !preset.is_custom;
+    });
+    const isRegionPresetActive = computed(() => selectedRegion.value >= 0);
+    const isAntennaPresetActive = computed(() => selectedAntenna.value >= 0);
+    const isHeightPresetActive = computed(() => selectedHeight.value >= 0);
+
+    const mismatchLossBadge = computed(() => {
+        if (selectedAntenna.value < 0) return null;
+        const preset = ANTENNA_PRESETS[selectedAntenna.value];
+        if (!preset) return null;
+        return mismatchLoss(preset.swr).toFixed(2);
+    });
+
+    function onHardwareChange() {
+        if (selectedHardware.value < 0) return;
+        const preset = HARDWARE_PRESETS[selectedHardware.value];
+        if (!preset || preset.is_custom) return;
+        // Convert dBm to watts: W = 10^((dBm - 30) / 10)
+        transmitter.tx_power = parseFloat(Math.pow(10, (preset.max_power_dbm - 30) / 10).toFixed(4));
+    }
+
+    function onRegionChange() {
+        if (selectedRegion.value < 0) return;
+        const preset = FREQUENCY_PRESETS[selectedRegion.value];
+        if (!preset) return;
+        transmitter.tx_freq = preset.frequency_mhz;
+    }
+
+    function onAntennaChange() {
+        if (selectedAntenna.value < 0) return;
+        const preset = ANTENNA_PRESETS[selectedAntenna.value];
+        if (!preset) return;
+        transmitter.tx_gain = preset.gain_dbi;
+    }
+
+    function onHeightChange() {
+        if (selectedHeight.value < 0) return;
+        const preset = HEIGHT_PRESETS[selectedHeight.value];
+        if (!preset) return;
+        transmitter.tx_height = preset.height_m;
+    }
 
     const centerMapOnTransmitter = () => {
         if (!isNaN(transmitter.tx_lat) && !isNaN(transmitter.tx_lon)) {

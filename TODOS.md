@@ -26,12 +26,12 @@
 - [x] Add SQLite schema: `towers` table (id, name, params JSON, geotiff BLOB, created_at, updated_at)
 - [x] Add SQLite schema: `tasks` table (id, tower_id, status, error, created_at)
 - [x] Create `app/db/` module with schema init and access functions
-- [ ] Rewrite `run_splat` to persist results to SQLite instead of Redis
-- [ ] Rewrite `/predict` to create task row in SQLite
-- [ ] Rewrite `/status/{task_id}` to read from SQLite
-- [ ] Rewrite `/result/{task_id}` to stream GeoTIFF from SQLite
-- [ ] Add `GET /towers` endpoint to list all towers with metadata (no blobs)
-- [ ] Add `DELETE /towers/{id}` endpoint (admin-only)
+- [x] Rewrite `run_splat` to persist results to SQLite instead of Redis
+- [x] Rewrite `/predict` to create task row in SQLite
+- [x] Rewrite `/status/{task_id}` to read from SQLite
+- [x] Rewrite `/result/{task_id}` to stream GeoTIFF from SQLite
+- [x] Add `GET /towers` endpoint to list all towers with metadata (no blobs)
+- [x] Add `DELETE /towers/{id}` endpoint (admin-only)
 - [x] Remove `redis` from `requirements.txt`
 - [x] Remove Redis client initialization from `main.py`
 
@@ -69,11 +69,11 @@
 - [ ] Add SWR mismatch loss calculation to backend `app/services/splat.py` (apply to effective TX power)
 - [ ] Display computed mismatch loss in UI next to antenna selector (informational)
 - [x] Create `src/presets/heights.ts` mapping labels to meters (ground: 1m, first floor window: 3m, second floor window: 6m, gutter line: 8m, rooftop: 10m, ground tower: 30m, roof tower: 15m)
-- [ ] Add hardware selector dropdown to transmitter form
-- [ ] Add country/region selector that auto-fills frequency
-- [ ] Add antenna selector dropdown
-- [ ] Add height preset dropdown (with manual override)
-- [ ] Lock auto-filled fields in preset mode, unlock all in custom mode
+- [x] Add hardware selector dropdown to transmitter form
+- [x] Add country/region selector that auto-fills frequency
+- [x] Add antenna selector dropdown (with mismatch loss badge)
+- [x] Add height preset dropdown (with manual override)
+- [x] Lock auto-filled fields in preset mode, unlock all in custom mode
 
 ## 8. Pre-cached client simulation matrix
 
