@@ -9,6 +9,9 @@ services:
     environment:
       - HOME=/root
       - TERM=xterm
+    # SPLAT! coverage predictions are memory-intensive (terrain tiles + PPM rendering).
+    # 12 GB accommodates up to 3 concurrent 100 km radius simulations.
+    # Reduce to 4 GB if running only small-radius (<10 km) predictions.
     mem_limit: 12G
     ports:
       - 8080:8080
