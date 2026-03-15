@@ -61,60 +61,52 @@ const useStore = defineStore('store', {
       this.splatParams.transmitter.tx_lat = lat
       this.splatParams.transmitter.tx_lon = lon
     },
-    // TODO: Performance — removeSite iterates all map layers to remove
-    // GeoRasterLayers, then redrawSites() does the same iteration again
-    // before re-adding. With per-site layer refs, this becomes a single
-    // map.removeLayer(site.layer) call with no full-map iteration.
     removeSite(index: number) {
       if (!this.map) {
         return
       }
-      this.localSites.splice(index, 1)
-      this.map.eachLayer((layer: L.Layer) => {
-        if (layer instanceof GeoRasterLayer) {
-          this.map!.removeLayer(layer);
-        }
-      });
-      this.redrawSites()
+      const site = this.localSites[index];
+      if (site && site.layer) {
+        this.map.removeLayer(site.layer);
+      }
+      this.localSites.splice(index, 1);
     },
-    // TODO: Performance — replace remove/re-add with per-site GeoRasterLayer
-    // instances stored on each Site object. Use layer.setOpacity(0) /
-    // layer.setOpacity(original) for visibility toggling and bringToFront()
-    // on baselayerchange instead of tearing down every layer. This avoids
-    // redundant georaster re-initialization on every redraw. See CLAUDE.md
-    // "Layer Management" for the target pattern.
-    //
-    // TODO: Performance — the hardcoded opacity: 0.7 ignores the user's
-    // display.overlay_transparency setting. Wire it up when refactoring
-    // to per-site layers (read from splatParams.display.overlay_transparency).
-    //
-    // TODO: Cleanup — {...site}.raster shallow-clones the site object
-    // needlessly on every redraw. Pass site.raster directly.
     redrawSites() {
       if (!this.map) {
         return;
       }
 
-      // Remove existing GeoRasterLayers
-      this.map.eachLayer((layer: L.Layer) => {
-        if (layer instanceof GeoRasterLayer) {
-          this.map!.removeLayer(layer);
+      const opacity = this.splatParams.display.overlay_transparency / 100;
+
+      this.localSites.forEach((site: Site) => {
+        if (site.raster && !site.layer) {
+          const rasterLayer = new GeoRasterLayer({
+            georaster: site.raster,
+            opacity: site.visible ? opacity : 0,
+            noDataValue: 255,
+            resolution: 256,
+          });
+          rasterLayer.addTo(this.map as L.Map);
+          site.layer = rasterLayer;
+        }
+        if (site.layer) {
+          site.layer.bringToFront();
         }
       });
-
-      // Add GeoRasterLayers back to the map
-      this.localSites.forEach((site: Site) => {
-        const rasterLayer = new GeoRasterLayer({
-          georaster: site.raster,
-          opacity: this.splatParams.display.overlay_transparency / 100,
-          noDataValue: 255,
-          resolution: 256,
-        });
-        rasterLayer.addTo(this.map as L.Map);
-        rasterLayer.bringToFront();
-      });
     },
-    initMap() {     
+    toggleSiteVisibility(index: number) {
+      const site = this.localSites[index];
+      if (!site) {
+        return;
+      }
+      site.visible = !site.visible;
+      if (site.visible) {
+        site.layer?.setOpacity(this.splatParams.display.overlay_transparency / 100);
+      } else {
+        site.layer?.setOpacity(0);
+      }
+    },
+    initMap() {
       this.map = L.map("map", {
         // center: [51.102167, -114.098667],
         zoom: 10,
@@ -165,7 +157,9 @@ const useStore = defineStore('store', {
       }).addTo(this.map as L.Map);
 
       this.map.on("baselayerchange", () => {
-        this.redrawSites(); // Re-apply the GeoRasterLayer on top
+        this.localSites.forEach((site: Site) => {
+          site.layer?.bringToFront();
+        });
       });
       this.currentMarker = L.marker(position, { icon: redPinMarker }).addTo(this.map as L.Map).bindPopup("Transmitter site"); // Variable to hold the current marker
       this.redrawSites();
@@ -209,10 +203,10 @@ const useStore = defineStore('store', {
           min_dbm: this.splatParams.display.min_dbm,
           max_dbm: this.splatParams.display.max_dbm,
         };
-    
+
         console.log("Payload:", payload);
         this.simulationState = 'running';
-    
+
         // Send the request to the backend's /predict endpoint
         const predictResponse = await fetch("/predict", {
           method: "POST",
@@ -221,35 +215,41 @@ const useStore = defineStore('store', {
           },
           body: JSON.stringify(payload),
         });
-    
+
         if (!predictResponse.ok) {
           this.simulationState = 'failed';
           const errorDetails = await predictResponse.text();
           throw new Error(`Failed to start prediction: ${errorDetails}`);
         }
-    
+
         const predictData = await predictResponse.json();
         const taskId = predictData.task_id;
-    
+
         console.log(`Prediction started with task ID: ${taskId}`);
 
-        // TODO: Performance — polling has no retry cap or exponential backoff.
-        // A failed /status fetch throws and silently kills the poll loop.
-        // Consider: (1) cap retries (e.g. 300 = 5 min at 1s), (2) exponential
-        // backoff for long simulations, (3) abort polling if the store/component
-        // is torn down (e.g. AbortController or a cancelled flag).
-        const pollInterval = 1000; // 1 seconds
+        const maxRetries = 300; // 5 minutes at initial 1s intervals
+        const maxInterval = 10000; // 10 seconds cap
+        let retryCount = 0;
+        let currentInterval = 1000; // Start at 1 second
+
         const pollStatus = async () => {
+          if (retryCount >= maxRetries) {
+            console.error(`Polling timed out after ${retryCount} retries.`);
+            this.simulationState = 'failed';
+            return;
+          }
+          retryCount++;
+
           const statusResponse = await fetch(
             `/status/${taskId}`,
           );
           if (!statusResponse.ok) {
             throw new Error("Failed to fetch task status.");
           }
-    
+
           const statusData = await statusResponse.json();
           console.log("Task status:", statusData);
-    
+
           if (statusData.status === "completed") {
             this.simulationState = 'completed';
             console.log("Simulation completed! Adding result to the map...");
@@ -265,23 +265,36 @@ const useStore = defineStore('store', {
             {
               const arrayBuffer = await resultResponse.arrayBuffer();
               const geoRaster = await parseGeoraster(arrayBuffer);
+
+              const opacity = this.splatParams.display.overlay_transparency / 100;
+              const rasterLayer = new GeoRasterLayer({
+                georaster: geoRaster,
+                opacity,
+                noDataValue: 255,
+                resolution: 256,
+              });
+              rasterLayer.addTo(this.map as L.Map);
+              rasterLayer.bringToFront();
+
               this.localSites.push({
                 params: cloneObject(this.splatParams),
                 taskId,
-                raster: geoRaster
+                raster: geoRaster,
+                layer: rasterLayer,
+                visible: true,
               });
               this.currentMarker!.removeFrom(this.map as L.Map);
               this.splatParams.transmitter.name = await randanimalSync();
-              this.redrawSites();
             }
           }
           else if (statusData.status === "failed") {
             this.simulationState = 'failed';
           } else {
-            setTimeout(pollStatus, pollInterval); // Retry after interval
+            setTimeout(pollStatus, currentInterval);
+            currentInterval = Math.min(currentInterval * 2, maxInterval); // Exponential backoff, capped at 10s
           }
         };
-    
+
         pollStatus(); // Start polling
       } catch (error) {
         console.error("Error:", error);

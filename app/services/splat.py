@@ -6,6 +6,7 @@ import io
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Literal, List, Tuple
 from rasterio.transform import Affine
 
@@ -87,7 +88,8 @@ class Splat:
         """
 
         # Check the provided SPLAT! path exists
-        if not os.path.isdir(splat_path):
+        splat_dir = Path(splat_path)
+        if not splat_dir.is_dir():
             raise FileNotFoundError(
                 f"Provided SPLAT! path '{splat_path}' is not a valid directory."
             )
@@ -100,12 +102,12 @@ class Splat:
             "srtm2sdf_hd_binary": "srtm2sdf-hd",  # used instead of srtm2sdf for 1-arcsecond data
         }
         for attr, binary_name in required_binaries.items():
-            binary_path = os.path.join(splat_path, binary_name)
-            if not os.path.isfile(binary_path) or not os.access(binary_path, os.X_OK):
+            binary_path = splat_dir / binary_name
+            if not binary_path.is_file() or not os.access(binary_path, os.X_OK):
                 raise FileNotFoundError(
                     f"'{attr}' binary not found or not executable at '{binary_path}'"
                 )
-            setattr(self, attr, binary_path)
+            setattr(self, attr, str(binary_path))
 
         self.tile_cache = Cache(
             cache_dir, size_limit=int(cache_size_gb * 1024 * 1024 * 1024)
@@ -154,11 +156,11 @@ class Splat:
                     tile_data = self._download_terrain_tile(tile_name)
                     sdf_data = self._convert_hgt_to_sdf(tile_data, tile_name, high_resolution=request.high_resolution)
 
-                    with open(os.path.join(tmpdir, sdf_hd_name if request.high_resolution else sdf_name), "wb") as sdf_file:
+                    with open(Path(tmpdir) / (sdf_hd_name if request.high_resolution else sdf_name), "wb") as sdf_file:
                         sdf_file.write(sdf_data)
 
                 # write transmitter / qth file
-                with open(os.path.join(tmpdir, "tx.qth"), "wb") as qth_file:
+                with open(Path(tmpdir) / "tx.qth", "wb") as qth_file:
                     qth_file.write(Splat._create_splat_qth("tx",request.lat,request.lon,request.tx_height))
 
                 # Apply SWR mismatch loss to effective TX power
@@ -169,7 +171,7 @@ class Splat:
                 )
 
                 # write model parameter / lrp file
-                with open(os.path.join(tmpdir,"splat.lrp"), "wb") as lrp_file:
+                with open(Path(tmpdir) / "splat.lrp", "wb") as lrp_file:
                     lrp_file.write(Splat._create_splat_lrp(
                         ground_dielectric=request.ground_dielectric,
                         ground_conductivity=request.ground_conductivity,
@@ -184,14 +186,14 @@ class Splat:
                         system_loss=request.system_loss))
 
                 # write colorbar / dcf file
-                with open(os.path.join(tmpdir, "splat.dcf"), "wb") as dcf_file:
+                with open(Path(tmpdir) / "splat.dcf", "wb") as dcf_file:
                     dcf_file.write(Splat._create_splat_dcf(
                         colormap_name=request.colormap,
                         min_dbm=request.min_dbm,
                         max_dbm=request.max_dbm
                     ))
 
-                logger.debug(f"Contents of {tmpdir}: {os.listdir(tmpdir)}")
+                logger.debug(f"Contents of {tmpdir}: {list(Path(tmpdir).iterdir())}")
 
                 splat_command = [
                     (
@@ -241,8 +243,8 @@ class Splat:
                         f"Stdout: {splat_result.stdout}\nStderr: {splat_result.stderr}"
                     )
 
-                with open(os.path.join(tmpdir, "output.ppm"), "rb") as ppm_file:
-                    with open(os.path.join(tmpdir, "output.kml"), "rb") as kml_file:
+                with open(Path(tmpdir) / "output.ppm", "rb") as ppm_file:
+                    with open(Path(tmpdir) / "output.kml", "rb") as kml_file:
                         ppm_data = ppm_file.read()
                         kml_data = kml_file.read()
                         geotiff_data = Splat._create_splat_geotiff(ppm_data,kml_data,request.colormap,request.min_dbm,request.max_dbm)
@@ -448,20 +450,16 @@ class Splat:
             logger.error(f"Error generating .lrp file content: {e}")
             raise
 
-    # TODO: DRY — colormap RGB generation is repeated in _create_splat_dcf,
-    # _create_splat_geotiff, and create_splat_colorbar. All three call
-    # plt.get_cmap / plt.Normalize / np.linspace / slice [:,:3]*255. Extract
-    # a shared helper, e.g.:
-    #   @staticmethod
-    #   def _colormap_to_rgb(name: str, min_dbm: float, max_dbm: float,
-    #                        levels: int = 255) -> np.ndarray:
-    #       cmap = plt.get_cmap(name, max(levels, 256))
-    #       norm = plt.Normalize(vmin=min_dbm, vmax=max_dbm)
-    #       vals = np.linspace(min_dbm, max_dbm, levels)
-    #       return (cmap(norm(vals))[:, :3] * 255).astype(int)
-    # Then _create_splat_dcf passes levels=32 with reversed linspace,
-    # _create_splat_geotiff passes levels=255, and create_splat_colorbar
-    # just returns the helper's output.
+    @staticmethod
+    def _colormap_to_rgb(
+        name: str, min_dbm: float, max_dbm: float, n_colors: int = 255
+    ) -> np.ndarray:
+        """Return an (n_colors, 3) array of RGB values (0-255) for *name*."""
+        cmap = plt.get_cmap(name, max(n_colors, 256))
+        norm = plt.Normalize(vmin=min_dbm, vmax=max_dbm)
+        vals = np.linspace(min_dbm, max_dbm, n_colors)
+        return (cmap(norm(vals))[:, :3] * 255).astype(int)
+
     @staticmethod
     def _create_splat_dcf(
             colormap_name: str, min_dbm: float, max_dbm: float
@@ -483,18 +481,14 @@ class Splat:
         )
 
         try:
-            # Generate color map values and normalization
-            cmap = plt.get_cmap(colormap_name)
-            cmap_values = np.linspace(max_dbm, min_dbm, 32)  # SPLAT! supports up to 32 levels
-            cmap_norm = plt.Normalize(vmin=min_dbm, vmax=max_dbm)
-
-            # Generate RGB values
-            rgb_colors = (cmap(cmap_norm(cmap_values))[:, :3] * 255).astype(int)
+            # Generate RGB values for 32 levels (SPLAT! maximum), reversed high→low
+            rgb_colors = Splat._colormap_to_rgb(colormap_name, min_dbm, max_dbm, 32)
+            cmap_values = np.linspace(max_dbm, min_dbm, 32)
 
             # Prepare .dcf content
             contents = "; SPLAT! Auto-generated DBM Signal Level Color Definition\n;\n"
             contents += "; Format: dBm: red, green, blue\n;\n"
-            for value, rgb in zip(cmap_values, rgb_colors):
+            for value, rgb in zip(cmap_values, rgb_colors[::-1]):
                 contents += f"{int(value):+4d}: {rgb[0]:3d}, {rgb[1]:3d}, {rgb[2]:3d}\n"
 
             logger.debug(f"Generated .dcf file contents:\n{contents}")
@@ -511,13 +505,7 @@ class Splat:
         max_dbm: float,
     ) -> list:
         """Generate a list of RGB color values corresponding to the color map, min and max RSSI values in dBm."""
-        cmap = plt.get_cmap(colormap_name, 256)  # colormap with 256 levels
-        cmap_norm = plt.Normalize(vmin=min_dbm, vmax=max_dbm)  # Normalize based on dBm range
-        cmap_values = np.linspace(min_dbm, max_dbm, 255)
-
-        # Map data values to RGB for visible colors
-        rgb_colors = list(cmap(cmap_norm(cmap_values))[:, :3] * 255).astype(int)
-        return rgb_colors
+        return Splat._colormap_to_rgb(colormap_name, min_dbm, max_dbm, 255)
 
 
     @staticmethod
@@ -584,12 +572,7 @@ class Splat:
             logger.debug(f"GeoTIFF transform matrix: {transform}")
 
             # Generate colormap with transparency
-            cmap = plt.get_cmap(colormap_name, 256)  # colormap with 256 levels
-            cmap_norm = plt.Normalize(vmin=min_dbm, vmax=max_dbm)  # Normalize based on dBm range
-            cmap_values = np.linspace(min_dbm, max_dbm, 255)
-
-            # Map data values to RGB for visible colors
-            rgb_colors = (cmap(cmap_norm(cmap_values))[:, :3] * 255).astype(int)
+            rgb_colors = Splat._colormap_to_rgb(colormap_name, min_dbm, max_dbm, 255)
 
             # Initialize GDAL-compatible colormap with transparency for null values
             gdal_colormap = {i: tuple(rgb) + (255,) for i, rgb in enumerate(rgb_colors)}
@@ -623,10 +606,18 @@ class Splat:
             logger.error(f"Error during GeoTIFF generation: {e}")
             raise RuntimeError(f"Error during GeoTIFF generation: {e}") from e
 
-    # TODO: DRY — _download_terrain_tile duplicates the S3 fetch + cache
-    # store pattern for the V1 fallback (lines 648-656 repeat 643-647).
-    # Extract a small _fetch_and_cache(s3_key, cache_key) helper to
-    # eliminate the duplicated obj/read/cache/return block.
+    def _fetch_tile_from_s3(self, s3_key: str, cache_key: str) -> bytes | None:
+        """Try to fetch a tile from S3, cache it on success, return None on failure."""
+        try:
+            obj = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
+            tile_data = obj['Body'].read()
+            self.tile_cache[cache_key] = tile_data
+            return tile_data
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                return None
+            raise
+
     def _download_terrain_tile(self, tile_name: str) -> bytes:
         """
         Downloads a terrain tile from the S3 bucket if not found in the local cache.
@@ -650,26 +641,23 @@ class Splat:
 
         # Download the tile from S3 if not in cache
         tile_dir_prefix = tile_name[:3]
-        s3_key = f"{self.bucket_prefix}/{tile_dir_prefix}/{tile_name}"
-        logger.info(f"Downloading {tile_name} from {self.bucket_name}/{s3_key}...")
+        s3_key_v3 = f"{self.bucket_prefix}/{tile_dir_prefix}/{tile_name}"
+        logger.info(f"Downloading {tile_name} from {self.bucket_name}/{s3_key_v3}...")
         try:
-            obj = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
-            tile_data = obj['Body'].read()
-            # Store the tile in the cache
-            self.tile_cache[tile_name] = tile_data
-            return tile_data
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchKey':
-                logger.info(f"Tile {tile_name} not found in S3 bucket, trying to download V1 SRTM data instead: {e}")
-                s3_key = f"skadi/{tile_dir_prefix}/{tile_name}"
-                obj = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
-                tile_data = obj['Body'].read()
-                # Store the tile in the cache
-                self.tile_cache[tile_name] = tile_data
+            tile_data = self._fetch_tile_from_s3(s3_key_v3, tile_name)
+            if tile_data is not None:
                 return tile_data
-            else:
-                logger.error(f"Failed to download {tile_name} from S3 due to ClientError: {e}")
-                raise
+
+            # V3 key not found — fall back to V1 SRTM data
+            s3_key_v1 = f"skadi/{tile_dir_prefix}/{tile_name}"
+            logger.info(f"Tile {tile_name} not found at {s3_key_v3}, trying V1 at {s3_key_v1}...")
+            tile_data = self._fetch_tile_from_s3(s3_key_v1, tile_name)
+            if tile_data is not None:
+                return tile_data
+
+            raise FileNotFoundError(
+                f"Tile {tile_name} not found in S3 bucket at either {s3_key_v3} or {s3_key_v1}"
+            )
         except Exception as e:
             logger.error(f"Failed to download {tile_name} from S3: {e}")
             raise
@@ -715,7 +703,7 @@ class Splat:
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
                 # Decompress the tile into the temporary directory
-                hgt_path = os.path.join(tmpdir, tile_name.replace(".gz", ""))
+                hgt_path = Path(tmpdir) / tile_name.replace(".gz", "")
                 logger.info(f"Decompressing {tile_name} into {hgt_path}.")
                 with gzip.GzipFile(fileobj=io.BytesIO(tile)) as gz_file:
                     with open(hgt_path, "wb") as hgt_file:
@@ -764,7 +752,7 @@ class Splat:
                 cmd = self.srtm2sdf_hd_binary if high_resolution else self.srtm2sdf_binary
                 logger.info(f"Converting {hgt_path} to {sdf_filename} using {cmd}.")
                 result = subprocess.run(
-                    [cmd, os.path.basename(tile_name.replace(".gz", ""))],
+                    [cmd, Path(tile_name.replace(".gz", "")).name],
                     cwd=tmpdir,
                     capture_output=True,
                     text=True,
@@ -772,10 +760,10 @@ class Splat:
                 )
 
                 logger.debug(f"srtm2sdf output:\n{result.stderr}")
-                sdf_path = os.path.join(tmpdir, sdf_filename)
+                sdf_path = Path(tmpdir) / sdf_filename
 
                 # Ensure the .sdf file was created
-                if not os.path.exists(sdf_path):
+                if not sdf_path.exists():
                     logger.error(f"Expected .sdf file not found: {sdf_path}")
                     raise RuntimeError(f"Failed to generate .sdf file: {sdf_path}")
 

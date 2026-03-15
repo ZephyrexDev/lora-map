@@ -2,6 +2,8 @@ export interface Site {
     params: SplatParams;
     taskId: string;
     raster: any;
+    layer?: any;
+    visible: boolean;
 }
 export interface SplatParams {
     transmitter: {
