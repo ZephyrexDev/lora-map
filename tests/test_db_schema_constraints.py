@@ -4,7 +4,6 @@ import sqlite3
 
 import pytest
 
-from app.db.connection import get_db
 from app.db.schema import init_db
 
 
@@ -12,7 +11,9 @@ from app.db.schema import init_db
 def db(tmp_path):
     db_file = tmp_path / "test.db"
     init_db(db_file)
-    conn = get_db(str(db_file))
+    conn = sqlite3.connect(str(db_file))
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.row_factory = sqlite3.Row
     yield conn
     conn.close()
 

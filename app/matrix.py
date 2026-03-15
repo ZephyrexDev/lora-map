@@ -7,10 +7,12 @@ in the ``settings`` table under the key ``"matrix_config"``.
 
 from __future__ import annotations
 
-import sqlite3
 from datetime import UTC, datetime
 from itertools import product
 
+from sqlalchemy.orm import Session
+
+from app.db.models import Setting
 from app.models.MatrixConfigRequest import MatrixConfigRequest
 
 HARDWARE_RX_PARAMS: dict[str, dict[str, float]] = {
@@ -39,26 +41,27 @@ DEFAULT_MATRIX_CONFIG = MatrixConfigRequest(
 _SETTINGS_KEY = "matrix_config"
 
 
-def get_matrix_config(conn: sqlite3.Connection) -> MatrixConfigRequest:
+def get_matrix_config(session: Session) -> MatrixConfigRequest:
     """Read the matrix config from the settings table.
 
     Returns the default config when no row exists.
     """
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (_SETTINGS_KEY,)).fetchone()
-    if row is None:
+    setting = session.get(Setting, _SETTINGS_KEY)
+    if setting is None:
         return DEFAULT_MATRIX_CONFIG.model_copy()
-    return MatrixConfigRequest.model_validate_json(row["value"])
+    return MatrixConfigRequest.model_validate_json(setting.value)
 
 
-def set_matrix_config(conn: sqlite3.Connection, config: MatrixConfigRequest) -> None:
+def set_matrix_config(session: Session, config: MatrixConfigRequest) -> None:
     """Upsert the matrix config into the settings table."""
     now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-    conn.execute(
-        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)"
-        " ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
-        (_SETTINGS_KEY, config.model_dump_json(), now),
-    )
-    conn.commit()
+    setting = session.get(Setting, _SETTINGS_KEY)
+    if setting is None:
+        session.add(Setting(key=_SETTINGS_KEY, value=config.model_dump_json(), updated_at=now))
+    else:
+        setting.value = config.model_dump_json()
+        setting.updated_at = now
+    session.commit()
 
 
 def get_matrix_combinations(config: MatrixConfigRequest) -> list[dict[str, str]]:

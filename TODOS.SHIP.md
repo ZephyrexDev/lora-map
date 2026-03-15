@@ -55,7 +55,7 @@
 
 - [x] 30. `Literal[tuple(AVAILABLE_COLORMAPS)]` evaluated at import time (`CoveragePredictionRequest.py`) — defer
 - [x] 31. Deadzone scoring weights are magic numbers (`app/services/deadzone.py:284`) — extract to named constants
-- [ ] 32. Raw SQL throughout codebase — migrate to SQLAlchemy (deferred: requires full ORM migration)
+- [x] 32. Raw SQL throughout codebase — migrated to SQLAlchemy ORM
 - [ ] 33. No retry mechanism for failed simulations — user must re-POST (deferred: acceptable for MVP)
 - [ ] 34. PPM image fully loaded into memory for large radius simulations (deferred: rare edge case)
 

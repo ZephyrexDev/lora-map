@@ -1,49 +1,36 @@
-"""Tests for app.db.connection — SQLite connection factory."""
+"""Tests for app.db.connection — SQLAlchemy engine and session factory."""
 
-import sqlite3
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from app.db.connection import get_db
+from app.db.connection import db_session, init_engine
 
 
-class TestGetDb:
-    def test_returns_sqlite3_connection(self, tmp_path):
+class TestInitEngine:
+    def test_creates_database_file(self, tmp_path):
         db_file = tmp_path / "conn.db"
-        conn = get_db(str(db_file))
-        try:
-            assert isinstance(conn, sqlite3.Connection)
-        finally:
-            conn.close()
-
-    def test_explicit_path_is_used(self, tmp_path):
-        db_file = tmp_path / "explicit.db"
-        conn = get_db(str(db_file))
-        try:
-            assert db_file.exists()
-        finally:
-            conn.close()
-
-    def test_row_factory_is_sqlite3_row(self, tmp_path):
-        db_file = tmp_path / "row.db"
-        conn = get_db(str(db_file))
-        try:
-            assert conn.row_factory is sqlite3.Row
-        finally:
-            conn.close()
+        engine = init_engine(str(db_file))
+        # SQLite creates the file on first connection, not engine creation
+        with engine.connect():
+            pass
+        assert db_file.exists()
 
     def test_wal_mode_enabled(self, tmp_path):
         db_file = tmp_path / "wal.db"
-        conn = get_db(str(db_file))
-        try:
-            result = conn.execute("PRAGMA journal_mode;").fetchone()
-            assert result[0] == "wal"
-        finally:
-            conn.close()
+        engine = init_engine(str(db_file))
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA journal_mode")).scalar()
+            assert result == "wal"
 
     def test_foreign_keys_enabled(self, tmp_path):
         db_file = tmp_path / "fk.db"
-        conn = get_db(str(db_file))
-        try:
-            result = conn.execute("PRAGMA foreign_keys;").fetchone()
-            assert result[0] == 1
-        finally:
-            conn.close()
+        engine = init_engine(str(db_file))
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA foreign_keys")).scalar()
+            assert result == 1
+
+
+class TestDbSession:
+    def test_yields_session(self):
+        with db_session() as session:
+            assert isinstance(session, Session)

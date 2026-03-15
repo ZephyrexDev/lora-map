@@ -1,6 +1,5 @@
 """Shared pytest configuration and fixtures for all backend tests."""
 
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -12,7 +11,8 @@ from fastapi.testclient import TestClient
 
 import app.auth as auth_mod
 import app.main as main_mod
-from app.db import db_connection, init_db
+from app.db import db_session, init_db
+from app.db.models import Setting, Simulation, Task, Tower, TowerPath
 from app.main import app
 
 # ---------------------------------------------------------------------------
@@ -72,13 +72,13 @@ def pytest_collection_modifyitems(config, items):
 def _reset_db():
     """Re-initialize and wipe the database before every test."""
     init_db(_tmp_db_path)
-    with db_connection() as conn:
-        conn.execute("DELETE FROM simulations")
-        conn.execute("DELETE FROM tasks")
-        conn.execute("DELETE FROM tower_paths")
-        conn.execute("DELETE FROM towers")
-        conn.execute("DELETE FROM settings")
-        conn.commit()
+    with db_session() as session:
+        session.query(Simulation).delete()
+        session.query(Task).delete()
+        session.query(TowerPath).delete()
+        session.query(Tower).delete()
+        session.query(Setting).delete()
+        session.commit()
     yield
 
 
@@ -125,12 +125,9 @@ def insert_tower(
 ) -> str:
     """Insert a tower row and return its id."""
     tower_id = tower_id or str(uuid4())
-    with db_connection() as conn:
-        conn.execute(
-            "INSERT INTO towers (id, name, params, geotiff) VALUES (?, ?, ?, ?)",
-            (tower_id, name, json.dumps({"lat": 0, "lon": 0}), geotiff),
-        )
-        conn.commit()
+    with db_session() as session:
+        session.add(Tower(id=tower_id, name=name, params={"lat": 0, "lon": 0}, geotiff=geotiff))
+        session.commit()
     return tower_id
 
 
@@ -142,17 +139,15 @@ def insert_task(
 ) -> str:
     """Insert a task row and return its id."""
     task_id = task_id or str(uuid4())
-    with db_connection() as conn:
-        conn.execute(
-            "INSERT INTO tasks (id, tower_id, status, error) VALUES (?, ?, ?, ?)",
-            (task_id, tower_id, status, error),
-        )
-        conn.commit()
+    with db_session() as session:
+        session.add(Task(id=task_id, tower_id=tower_id, status=status, error=error))
+        session.commit()
     return task_id
 
 
 def set_tower_geotiff(tower_id: str, data: bytes) -> None:
     """Set geotiff blob on an existing tower."""
-    with db_connection() as conn:
-        conn.execute("UPDATE towers SET geotiff = ? WHERE id = ?", (data, tower_id))
-        conn.commit()
+    with db_session() as session:
+        tower = session.get(Tower, tower_id)
+        tower.geotiff = data
+        session.commit()

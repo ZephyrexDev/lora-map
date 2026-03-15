@@ -4,7 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.db import db_connection
+from app.db import db_session
+from app.db.models import TowerPath
 from tests.conftest import insert_tower
 
 pytestmark = pytest.mark.slow
@@ -20,13 +21,18 @@ class TestGetTowerPaths:
         t1 = insert_tower(name="Tower A")
         t2 = insert_tower(name="Tower B")
         path_id = str(uuid4())
-        with db_connection() as conn:
-            conn.execute(
-                "INSERT INTO tower_paths (id, tower_a_id, tower_b_id, path_loss_db, has_los, distance_km) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (path_id, t1, t2, 120.5, 1, 15.3),
+        with db_session() as session:
+            session.add(
+                TowerPath(
+                    id=path_id,
+                    tower_a_id=t1,
+                    tower_b_id=t2,
+                    path_loss_db=120.5,
+                    has_los=1,
+                    distance_km=15.3,
+                )
             )
-            conn.commit()
+            session.commit()
 
         resp = client.get("/tower-paths")
         assert resp.status_code == 200
@@ -88,12 +94,9 @@ class TestDeleteTowerPath:
         t1 = insert_tower(name="Tower A")
         t2 = insert_tower(name="Tower B")
         path_id = str(uuid4())
-        with db_connection() as conn:
-            conn.execute(
-                "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES (?, ?, ?)",
-                (path_id, t1, t2),
-            )
-            conn.commit()
+        with db_session() as session:
+            session.add(TowerPath(id=path_id, tower_a_id=t1, tower_b_id=t2))
+            session.commit()
 
         resp = client.delete(f"/tower-paths/{path_id}")
         assert resp.status_code == 200
@@ -101,8 +104,8 @@ class TestDeleteTowerPath:
         assert "deleted" in body["message"].lower()
         assert body["id"] == path_id
 
-        with db_connection() as conn:
-            assert conn.execute("SELECT * FROM tower_paths WHERE id = ?", (path_id,)).fetchone() is None
+        with db_session() as session:
+            assert session.get(TowerPath, path_id) is None
 
 
 class TestTowerDeletionCascade:
@@ -110,17 +113,14 @@ class TestTowerDeletionCascade:
         t1 = insert_tower(name="Tower A")
         t2 = insert_tower(name="Tower B")
         path_id = str(uuid4())
-        with db_connection() as conn:
-            conn.execute(
-                "INSERT INTO tower_paths (id, tower_a_id, tower_b_id) VALUES (?, ?, ?)",
-                (path_id, t1, t2),
-            )
-            conn.commit()
+        with db_session() as session:
+            session.add(TowerPath(id=path_id, tower_a_id=t1, tower_b_id=t2))
+            session.commit()
 
         client.delete(f"/towers/{t1}")
 
-        with db_connection() as conn:
-            assert conn.execute("SELECT * FROM tower_paths WHERE id = ?", (path_id,)).fetchone() is None
+        with db_session() as session:
+            assert session.get(TowerPath, path_id) is None
 
 
 class TestAutoPathCreation:
@@ -133,10 +133,17 @@ class TestAutoPathCreation:
         resp2 = client.post("/predict", json=valid_payload)
         t2 = resp2.json()["tower_id"]
 
-        with db_connection() as conn:
-            paths = conn.execute(
-                "SELECT * FROM tower_paths WHERE "
-                "(tower_a_id = ? AND tower_b_id = ?) OR (tower_a_id = ? AND tower_b_id = ?)",
-                (t1, t2, t2, t1),
-            ).fetchall()
+        from sqlalchemy import or_
+
+        with db_session() as session:
+            paths = (
+                session.query(TowerPath)
+                .filter(
+                    or_(
+                        (TowerPath.tower_a_id == t1) & (TowerPath.tower_b_id == t2),
+                        (TowerPath.tower_a_id == t2) & (TowerPath.tower_b_id == t1),
+                    )
+                )
+                .all()
+            )
             assert len(paths) == 1

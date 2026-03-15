@@ -4,7 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.db import db_connection
+from app.db import db_session
+from app.db.models import Task, Tower
 from tests.conftest import insert_task, insert_tower, set_tower_geotiff
 
 pytestmark = pytest.mark.slow
@@ -26,22 +27,22 @@ class TestPostPredict:
         resp = client.post("/predict", json=valid_payload)
         body = resp.json()
 
-        with db_connection() as conn:
-            tower = conn.execute("SELECT * FROM towers WHERE id = ?", (body["tower_id"],)).fetchone()
+        with db_session() as session:
+            tower = session.get(Tower, body["tower_id"])
             assert tower is not None
-            assert tower["name"] == "Unnamed"
+            assert tower.name == "Unnamed"
 
-            task = conn.execute("SELECT * FROM tasks WHERE id = ?", (body["task_id"],)).fetchone()
+            task = session.get(Task, body["task_id"])
             assert task is not None
-            assert task["tower_id"] == body["tower_id"]
+            assert task.tower_id == body["tower_id"]
 
     def test_assigns_color_to_tower(self, client, valid_payload):
         resp = client.post("/predict", json=valid_payload)
         body = resp.json()
-        with db_connection() as conn:
-            tower = conn.execute("SELECT color FROM towers WHERE id = ?", (body["tower_id"],)).fetchone()
-            assert tower["color"] is not None
-            assert tower["color"].startswith("#")
+        with db_session() as session:
+            tower = session.get(Tower, body["tower_id"])
+            assert tower.color is not None
+            assert tower.color.startswith("#")
 
     def test_returns_422_for_missing_payload(self, client):
         resp = client.post("/predict", json={})
@@ -170,15 +171,15 @@ class TestDeleteTower:
         assert resp.status_code == 200
         assert "deleted" in resp.json()["message"].lower()
 
-        with db_connection() as conn:
-            assert conn.execute("SELECT * FROM towers WHERE id = ?", (tower_id,)).fetchone() is None
+        with db_session() as session:
+            assert session.get(Tower, tower_id) is None
 
     def test_cascades_delete_to_tasks(self, client, valid_payload):
         body = client.post("/predict", json=valid_payload).json()
         client.delete(f"/towers/{body['tower_id']}")
 
-        with db_connection() as conn:
-            assert conn.execute("SELECT * FROM tasks WHERE id = ?", (body["task_id"],)).fetchone() is None
+        with db_session() as session:
+            assert session.get(Task, body["task_id"]) is None
 
     def test_double_delete_returns_404(self, client):
         tid = insert_tower()

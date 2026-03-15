@@ -4,7 +4,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.db import db_connection
+from app.db import db_session
+from app.db.models import Tower
 from app.models.responses import TowerLocation
 from tests.conftest import insert_tower
 
@@ -16,13 +17,16 @@ class TestGetTowerLocation:
         from app.main import _get_tower_location
 
         tid = str(uuid4())
-        with db_connection() as conn:
-            conn.execute(
-                "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
-                (tid, "T", '{"lat": 45.5, "lon": -74.2, "tx_height": 10, "frequency_mhz": 915}'),
+        with db_session() as session:
+            session.add(
+                Tower(
+                    id=tid,
+                    name="T",
+                    params={"lat": 45.5, "lon": -74.2, "tx_height": 10, "frequency_mhz": 915},
+                )
             )
-            conn.commit()
-            loc = _get_tower_location(conn, tid)
+            session.commit()
+            loc = _get_tower_location(session, tid)
 
         assert isinstance(loc, TowerLocation)
         assert loc.lat == 45.5
@@ -33,26 +37,19 @@ class TestGetTowerLocation:
     def test_returns_none_for_missing_tower(self, client):
         from app.main import _get_tower_location
 
-        with db_connection() as conn:
-            loc = _get_tower_location(conn, str(uuid4()))
+        with db_session() as session:
+            loc = _get_tower_location(session, str(uuid4()))
         assert loc is None
 
-    def test_uses_defaults_for_missing_fields(self, client):
+    def test_raises_for_missing_required_fields(self, client):
         from app.main import _get_tower_location
 
         tid = str(uuid4())
-        with db_connection() as conn:
-            conn.execute(
-                "INSERT INTO towers (id, name, params) VALUES (?, ?, ?)",
-                (tid, "T", "{}"),
-            )
-            conn.commit()
-            loc = _get_tower_location(conn, tid)
-
-        assert loc.lat == 0
-        assert loc.lon == 0
-        assert loc.tx_height == 1
-        assert loc.frequency_mhz == 905.0
+        with db_session() as session:
+            session.add(Tower(id=tid, name="T", params={}))
+            session.commit()
+            with pytest.raises(ValueError, match="missing required param"):
+                _get_tower_location(session, tid)
 
 
 class TestGeotiffResponseOrStatus:
@@ -99,7 +96,7 @@ class TestDeleteRow:
         from app.main import _delete_row
 
         with pytest.raises(HTTPException) as exc_info:
-            _delete_row("towers", str(uuid4()), "Tower")
+            _delete_row(Tower, str(uuid4()), "Tower")
         assert exc_info.value.status_code == 404
 
     def test_returns_delete_response_on_success(self, client):
@@ -107,6 +104,6 @@ class TestDeleteRow:
         from app.models.responses import DeleteResponse
 
         tid = insert_tower()
-        result = _delete_row("towers", tid, "Tower")
+        result = _delete_row(Tower, tid, "Tower")
         assert isinstance(result, DeleteResponse)
         assert result.id == tid

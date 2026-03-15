@@ -1,61 +1,73 @@
-"""SQLite connection factory for the LoRa Coverage Planner."""
+"""SQLAlchemy engine and session factory for the LoRa Coverage Planner."""
 
 from __future__ import annotations
 
 import logging
 import os
-import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+
+from sqlalchemy import Engine, create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_DB_PATH: str = "/data/lora-planner.db"
 
+_engine: Engine | None = None
+_session_factory: sessionmaker[Session] | None = None
 
-def get_db(db_path: str | None = None) -> sqlite3.Connection:
-    """Return a configured SQLite connection.
+
+def init_engine(db_path: str | Path | None = None) -> Engine:
+    """Create and configure the SQLAlchemy engine for the given database path.
+
+    Sets WAL journal mode and enables foreign keys on every new connection.
+    Initializes the global engine and session factory used by :func:`db_session`.
 
     Parameters
     ----------
     db_path:
         Filesystem path to the database file.  Falls back to the ``DB_PATH``
         environment variable, then to :data:`DEFAULT_DB_PATH`.
-
-    Returns
-    -------
-    sqlite3.Connection
-        A connection with WAL mode, foreign keys enabled, and
-        ``row_factory`` set to :class:`sqlite3.Row`.
     """
-    resolved_path: Path = Path(db_path or os.environ.get("DB_PATH", DEFAULT_DB_PATH))
+    global _engine, _session_factory
 
-    logger.debug("Opening database connection to %s", resolved_path)
+    resolved = Path(db_path or os.environ.get("DB_PATH", DEFAULT_DB_PATH))
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    logger.debug("Creating SQLAlchemy engine for %s", resolved)
 
-    conn: sqlite3.Connection = sqlite3.connect(str(resolved_path))
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA foreign_keys=ON;")
-    conn.row_factory = sqlite3.Row
+    engine = create_engine(
+        f"sqlite:///{resolved}",
+        connect_args={"check_same_thread": False},
+    )
 
-    return conn
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    _engine = engine
+    _session_factory = sessionmaker(bind=engine)
+    return engine
+
+
+def get_engine() -> Engine:
+    """Return the global engine, raising if not yet initialized."""
+    if _engine is None:
+        raise RuntimeError("Database engine not initialized — call init_engine() first")
+    return _engine
 
 
 @contextmanager
-def db_connection(db_path: str | None = None) -> Generator[sqlite3.Connection, None, None]:
-    """Context manager that yields a configured SQLite connection and closes it on exit.
-
-    Parameters
-    ----------
-    db_path:
-        Filesystem path to the database file.  Passed through to :func:`get_db`.
-
-    Yields
-    ------
-    sqlite3.Connection
-    """
-    conn = get_db(db_path)
+def db_session() -> Generator[Session, None, None]:
+    """Context manager that yields a configured SQLAlchemy session and closes it on exit."""
+    if _session_factory is None:
+        raise RuntimeError("Database not initialized — call init_engine() first")
+    session = _session_factory()
     try:
-        yield conn
+        yield session
     finally:
-        conn.close()
+        session.close()

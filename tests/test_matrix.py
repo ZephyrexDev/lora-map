@@ -1,6 +1,6 @@
 """Tests for the matrix configuration module (app.matrix)."""
 
-from app.db import db_connection
+from app.db import db_session
 from app.matrix import (
     DEFAULT_MATRIX_CONFIG,
     get_matrix_combinations,
@@ -24,8 +24,8 @@ class TestDefaultMatrixConfig:
 
 class TestGetMatrixConfig:
     def test_returns_default_when_no_row_exists(self):
-        with db_connection() as conn:
-            config = get_matrix_config(conn)
+        with db_session() as session:
+            config = get_matrix_config(session)
         assert config == DEFAULT_MATRIX_CONFIG
 
     def test_returns_persisted_config_after_set(self):
@@ -34,9 +34,10 @@ class TestGetMatrixConfig:
             antennas=["bingfu_whip"],
             terrain=["bare_earth", "lulc_clutter"],
         )
-        with db_connection() as conn:
-            set_matrix_config(conn, custom)
-            result = get_matrix_config(conn)
+        with db_session() as session:
+            set_matrix_config(session, custom)
+        with db_session() as session:
+            result = get_matrix_config(session)
         assert result == custom
 
 
@@ -47,9 +48,10 @@ class TestSetMatrixConfig:
             antennas=["duck_stubby", "slinkdsco_omni"],
             terrain=["bare_earth"],
         )
-        with db_connection() as conn:
-            set_matrix_config(conn, custom)
-            result = get_matrix_config(conn)
+        with db_session() as session:
+            set_matrix_config(session, custom)
+        with db_session() as session:
+            result = get_matrix_config(session)
         assert result == custom
 
     def test_upsert_overwrites_previous_value(self):
@@ -63,10 +65,12 @@ class TestSetMatrixConfig:
             antennas=["bingfu_whip"],
             terrain=["lulc_clutter"],
         )
-        with db_connection() as conn:
-            set_matrix_config(conn, first)
-            set_matrix_config(conn, second)
-            result = get_matrix_config(conn)
+        with db_session() as session:
+            set_matrix_config(session, first)
+        with db_session() as session:
+            set_matrix_config(session, second)
+        with db_session() as session:
+            result = get_matrix_config(session)
         assert result == second
 
 

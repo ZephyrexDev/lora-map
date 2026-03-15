@@ -1,11 +1,18 @@
-"""SQLite schema definitions and database initialization for the LoRa Coverage Planner."""
+"""SQLite schema definitions and database initialization for the LoRa Coverage Planner.
+
+DDL migrations are applied via raw SQL through the SQLAlchemy engine.  The ORM
+models in ``models.py`` describe the *current* schema state for application
+queries; this module handles schema *evolution*.
+"""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 
-from app.db.connection import db_connection
+from sqlalchemy import text
+
+from app.db.connection import init_engine
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +111,9 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
 def init_db(db_path: str | Path) -> None:
     """Create the database file (if needed) and apply all pending schema migrations.
 
+    Also initializes the global SQLAlchemy engine and session factory via
+    :func:`init_engine`, so callers can use :func:`db_session` immediately after.
+
     Each migration is applied inside a single transaction and its version
     number is recorded in the ``schema_version`` table so it is never
     re-applied.
@@ -113,24 +123,22 @@ def init_db(db_path: str | Path) -> None:
     db_path:
         Filesystem path where the SQLite database should be created.
     """
-    db_path = Path(db_path)
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-
     logger.info("Initializing database at %s", db_path)
+    engine = init_engine(db_path)
 
-    with db_connection(str(db_path)) as conn:
+    with engine.connect() as conn:
         # Bootstrap the version-tracking table (always safe to re-run)
-        conn.execute(SCHEMA_VERSION)
+        conn.execute(text(SCHEMA_VERSION))
 
-        current = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_version").fetchone()[0]
+        current = conn.execute(text("SELECT COALESCE(MAX(version), 0) FROM schema_version")).scalar()
         logger.info("Current schema version: %s", current)
 
         for version, statements in MIGRATIONS:
             if version <= current:
                 continue
             for stmt in statements:
-                conn.execute(stmt)
-            conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
+                conn.execute(text(stmt))
+            conn.execute(text("INSERT INTO schema_version (version) VALUES (:v)"), {"v": version})
             logger.info("Applied schema migration v%s", version)
 
         conn.commit()

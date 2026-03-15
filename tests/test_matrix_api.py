@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.db import db_connection
+from app.db import db_session
 from app.matrix import DEFAULT_MATRIX_CONFIG, set_matrix_config
 from app.models.MatrixConfigRequest import MatrixConfigRequest
 
@@ -21,8 +21,8 @@ class TestGetMatrixConfig:
             antennas=["bingfu_whip"],
             terrain=["bare_earth"],
         )
-        with db_connection() as conn:
-            set_matrix_config(conn, custom)
+        with db_session() as session:
+            set_matrix_config(session, custom)
 
         resp = client.get("/matrix/config")
         assert resp.status_code == 200

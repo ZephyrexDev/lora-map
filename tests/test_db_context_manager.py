@@ -1,51 +1,30 @@
-"""Tests for the db_connection context manager."""
+"""Tests for the db_session context manager."""
 
-import sqlite3
+from app.db import db_session
+from app.db.models import Tower
 
-from app.db.connection import db_connection
 
+class TestDbSession:
+    def test_yields_usable_session(self):
+        with db_session() as session:
+            # Should be able to query without error
+            session.query(Tower).all()
 
-class TestDbConnection:
-    def test_yields_connection(self, tmp_path):
-        db_file = tmp_path / "cm.db"
-        with db_connection(str(db_file)) as conn:
-            assert isinstance(conn, sqlite3.Connection)
+    def test_data_persists_across_sessions(self):
+        with db_session() as session:
+            session.add(Tower(id="cm-t1", name="CM Test", params={"lat": 0, "lon": 0}))
+            session.commit()
 
-    def test_closes_connection_on_exit(self, tmp_path):
-        db_file = tmp_path / "cm.db"
-        with db_connection(str(db_file)) as conn:
-            pass
-        # After exiting, the connection should be closed.
-        # Attempting to use it raises ProgrammingError.
-        try:
-            conn.execute("SELECT 1")
-            closed = False
-        except Exception:
-            closed = True
-        assert closed
+        with db_session() as session:
+            tower = session.get(Tower, "cm-t1")
+            assert tower is not None
+            assert tower.name == "CM Test"
 
-    def test_closes_connection_on_exception(self, tmp_path):
-        db_file = tmp_path / "cm.db"
-        try:
-            with db_connection(str(db_file)) as conn:
-                raise ValueError("boom")
-        except ValueError:
-            pass
-        try:
-            conn.execute("SELECT 1")
-            closed = False
-        except Exception:
-            closed = True
-        assert closed
+    def test_rollback_on_no_commit(self):
+        with db_session() as session:
+            session.add(Tower(id="cm-t2", name="Uncommitted", params={"lat": 0, "lon": 0}))
+            # No commit — should be rolled back
 
-    def test_propagates_exception(self, tmp_path):
-        db_file = tmp_path / "cm.db"
-        with db_connection(str(db_file)) as conn:
-            conn.execute("CREATE TABLE t (id INTEGER)")
-            conn.execute("INSERT INTO t VALUES (1)")
-            conn.commit()
-
-        # Verify data persists through context manager
-        with db_connection(str(db_file)) as conn:
-            row = conn.execute("SELECT id FROM t").fetchone()
-            assert row[0] == 1
+        with db_session() as session:
+            tower = session.get(Tower, "cm-t2")
+            assert tower is None

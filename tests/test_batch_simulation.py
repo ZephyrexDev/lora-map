@@ -5,7 +5,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.db import db_connection
+from app.db import db_session
+from app.db.models import Simulation
 from app.matrix import get_matrix_combinations, get_matrix_config
 
 pytestmark = pytest.mark.slow
@@ -15,8 +16,8 @@ class TestPredictCreatesSimulations:
     """POST /predict should create simulation rows for each matrix combination."""
 
     def test_creates_simulation_rows_for_each_combination(self, client, valid_payload):
-        with db_connection() as conn:
-            config = get_matrix_config(conn)
+        with db_session() as session:
+            config = get_matrix_config(session)
         expected_combos = get_matrix_combinations(config)
 
         with patch("app.main.splat_service.coverage_prediction", return_value=b"FAKE"):
@@ -25,19 +26,16 @@ class TestPredictCreatesSimulations:
         assert resp.status_code == 201
         tower_id = resp.json()["tower_id"]
 
-        with db_connection() as conn:
-            rows = conn.execute(
-                "SELECT client_hardware, client_antenna, terrain_model, status " "FROM simulations WHERE tower_id = ?",
-                (tower_id,),
-            ).fetchall()
+        with db_session() as session:
+            rows = session.query(Simulation).filter_by(tower_id=tower_id).all()
 
         assert len(rows) == len(expected_combos)
         for row in rows:
-            assert row["status"] in ("pending", "completed", "failed")
+            assert row.status in ("pending", "completed", "failed")
 
     def test_simulation_rows_match_matrix_combinations(self, client, valid_payload):
-        with db_connection() as conn:
-            config = get_matrix_config(conn)
+        with db_session() as session:
+            config = get_matrix_config(session)
         expected_combos = get_matrix_combinations(config)
 
         with patch("app.main.splat_service.coverage_prediction", return_value=b"FAKE"):
@@ -45,13 +43,10 @@ class TestPredictCreatesSimulations:
 
         tower_id = resp.json()["tower_id"]
 
-        with db_connection() as conn:
-            rows = conn.execute(
-                "SELECT client_hardware, client_antenna, terrain_model " "FROM simulations WHERE tower_id = ?",
-                (tower_id,),
-            ).fetchall()
+        with db_session() as session:
+            rows = session.query(Simulation).filter_by(tower_id=tower_id).all()
 
-        actual = {(r["client_hardware"], r["client_antenna"], r["terrain_model"]) for r in rows}
+        actual = {(r.client_hardware, r.client_antenna, r.terrain_model) for r in rows}
         expected = {(c["hardware"], c["antenna"], c["terrain"]) for c in expected_combos}
         assert actual == expected
 
@@ -99,17 +94,12 @@ class TestGetSimulationResult:
         tower_id = resp.json()["tower_id"]
 
         # Pick the first simulation and mark it completed with a geotiff
-        with db_connection() as conn:
-            row = conn.execute(
-                "SELECT id FROM simulations WHERE tower_id = ? LIMIT 1",
-                (tower_id,),
-            ).fetchone()
-            sim_id = row["id"]
-            conn.execute(
-                "UPDATE simulations SET status = 'completed', geotiff = ? WHERE id = ?",
-                (b"SIM_GEOTIFF_DATA", sim_id),
-            )
-            conn.commit()
+        with db_session() as session:
+            sim = session.query(Simulation).filter_by(tower_id=tower_id).first()
+            sim_id = sim.id
+            sim.status = "completed"
+            sim.geotiff = b"SIM_GEOTIFF_DATA"
+            session.commit()
 
         resp = client.get(f"/simulations/{sim_id}/result")
         assert resp.status_code == 200
@@ -122,14 +112,11 @@ class TestGetSimulationResult:
 
         tower_id = resp.json()["tower_id"]
 
-        with db_connection() as conn:
-            row = conn.execute(
-                "SELECT id FROM simulations WHERE tower_id = ? AND status = 'pending' LIMIT 1",
-                (tower_id,),
-            ).fetchone()
+        with db_session() as session:
+            sim = session.query(Simulation).filter_by(tower_id=tower_id, status="pending").first()
 
-        if row is not None:
-            resp = client.get(f"/simulations/{row['id']}/result")
+        if sim is not None:
+            resp = client.get(f"/simulations/{sim.id}/result")
             assert resp.status_code == 200
             assert resp.json()["status"] == "pending"
 
@@ -144,11 +131,8 @@ class TestSimulationCascadeDelete:
         tower_id = resp.json()["tower_id"]
 
         # Confirm simulations exist
-        with db_connection() as conn:
-            count_before = conn.execute(
-                "SELECT COUNT(*) as cnt FROM simulations WHERE tower_id = ?",
-                (tower_id,),
-            ).fetchone()["cnt"]
+        with db_session() as session:
+            count_before = session.query(Simulation).filter_by(tower_id=tower_id).count()
         assert count_before > 0
 
         # Delete the tower
@@ -156,9 +140,6 @@ class TestSimulationCascadeDelete:
         assert resp.status_code == 200
 
         # Confirm simulations are gone
-        with db_connection() as conn:
-            count_after = conn.execute(
-                "SELECT COUNT(*) as cnt FROM simulations WHERE tower_id = ?",
-                (tower_id,),
-            ).fetchone()["cnt"]
+        with db_session() as session:
+            count_after = session.query(Simulation).filter_by(tower_id=tower_id).count()
         assert count_after == 0

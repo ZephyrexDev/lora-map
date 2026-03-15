@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.db import db_connection
+from app.db import db_session
 from app.matrix import set_matrix_config
 from app.models.MatrixConfigRequest import MatrixConfigRequest
 
@@ -27,8 +27,8 @@ class TestSimulationsEnabledOnlyFilter:
 
         # Narrow the matrix config to just one hardware + one antenna
         narrow = MatrixConfigRequest(hardware=["v3"], antennas=["bingfu_whip"], terrain=["bare_earth"])
-        with db_connection() as conn:
-            set_matrix_config(conn, narrow)
+        with db_session() as session:
+            set_matrix_config(session, narrow)
 
         resp = client.get(f"/towers/{tower_id}/simulations", params={"enabled_only": "true"})
         assert resp.status_code == 200
@@ -45,8 +45,8 @@ class TestSimulationsEnabledOnlyFilter:
         all_sims = client.get(f"/towers/{tower_id}/simulations").json()["simulations"]
 
         narrow = MatrixConfigRequest(hardware=["v3"], antennas=["bingfu_whip"], terrain=["bare_earth"])
-        with db_connection() as conn:
-            set_matrix_config(conn, narrow)
+        with db_session() as session:
+            set_matrix_config(session, narrow)
 
         filtered = client.get(f"/towers/{tower_id}/simulations", params={"enabled_only": "true"}).json()["simulations"]
         assert len(filtered) < len(all_sims)

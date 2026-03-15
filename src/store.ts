@@ -678,11 +678,12 @@ const useStore = defineStore("store", {
               const arrayBuffer = await resultResponse.arrayBuffer();
               const geoRaster = await parseGeoraster(arrayBuffer);
               const colorIndex = this.localSites.length % TOWER_COLORS.length;
+              const userColor = this.splatParams.transmitter.tx_color;
               this.localSites.push({
                 params: cloneObject(this.splatParams),
                 taskId,
                 raster: geoRaster,
-                color: TOWER_COLORS[colorIndex],
+                color: userColor && userColor !== "" ? userColor : TOWER_COLORS[colorIndex],
                 visible: true,
               });
               this.currentMarker?.removeFrom(this.map as L.Map);

@@ -8,7 +8,8 @@ import pytest
 import rasterio
 from rasterio.transform import from_bounds
 
-from app.db import db_connection
+from app.db import db_session
+from app.db.models import Simulation
 from tests.conftest import insert_tower
 
 pytestmark = pytest.mark.slow
@@ -38,13 +39,19 @@ def _insert_simulation(
     tower_id: str, hw: str, ant: str, terrain: str, geotiff: bytes | None, status: str = "completed"
 ):
     sim_id = str(uuid4())
-    with db_connection() as conn:
-        conn.execute(
-            "INSERT INTO simulations (id, tower_id, client_hardware, client_antenna, terrain_model, status, geotiff) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (sim_id, tower_id, hw, ant, terrain, status, geotiff),
+    with db_session() as session:
+        session.add(
+            Simulation(
+                id=sim_id,
+                tower_id=tower_id,
+                client_hardware=hw,
+                client_antenna=ant,
+                terrain_model=terrain,
+                status=status,
+                geotiff=geotiff,
+            )
         )
-        conn.commit()
+        session.commit()
     return sim_id
 
 
