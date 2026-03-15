@@ -51,11 +51,27 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 """
 
+SCHEMA_SIMULATIONS: str = """\
+CREATE TABLE IF NOT EXISTS simulations (
+    id TEXT PRIMARY KEY,
+    tower_id TEXT NOT NULL REFERENCES towers(id) ON DELETE CASCADE,
+    client_hardware TEXT NOT NULL,
+    client_antenna TEXT NOT NULL,
+    terrain_model TEXT NOT NULL DEFAULT 'bare_earth',
+    status TEXT NOT NULL DEFAULT 'pending',
+    geotiff BLOB,
+    error TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(tower_id, client_hardware, client_antenna, terrain_model)
+);
+"""
+
 ALL_SCHEMAS: list[str] = [
     SCHEMA_TOWERS,
     SCHEMA_TASKS,
     SCHEMA_TOWER_PATHS,
     SCHEMA_SETTINGS,
+    SCHEMA_SIMULATIONS,
 ]
 
 

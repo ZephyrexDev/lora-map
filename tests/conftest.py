@@ -49,6 +49,7 @@ def _reset_db():
     """Re-initialize and wipe the database before every test."""
     init_db(_tmp_db_path)
     with db_connection() as conn:
+        conn.execute("DELETE FROM simulations")
         conn.execute("DELETE FROM tasks")
         conn.execute("DELETE FROM tower_paths")
         conn.execute("DELETE FROM towers")

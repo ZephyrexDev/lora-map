@@ -12,6 +12,18 @@ import sqlite3
 from datetime import UTC, datetime
 from itertools import product
 
+HARDWARE_RX_PARAMS: dict[str, dict[str, float]] = {
+    "v3": {"rx_sensitivity": -130.0},
+    "v4": {"rx_sensitivity": -130.0},
+}
+
+ANTENNA_RX_PARAMS: dict[str, dict[str, float]] = {
+    "ribbed_spring_helical": {"rx_gain": 0.0, "swr": 3.0},
+    "duck_stubby": {"rx_gain": 1.0, "swr": 3.5},
+    "bingfu_whip": {"rx_gain": 2.5, "swr": 1.8},
+    "slinkdsco_omni": {"rx_gain": 4.0, "swr": 1.1},
+}
+
 DEFAULT_MATRIX_CONFIG: dict[str, list[str]] = {
     "hardware": ["v3", "v4"],
     "antennas": [

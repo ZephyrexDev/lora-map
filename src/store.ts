@@ -5,7 +5,7 @@ import L from "leaflet";
 import GeoRasterLayer from "georaster-layer-for-leaflet";
 import parseGeoraster from "georaster";
 import "leaflet-easyprint";
-import { type Site, type SplatParams } from "./types.ts";
+import { type Site, type SplatParams, type MatrixConfig } from "./types.ts";
 import { cloneObject, dbmToRgba } from "./utils.ts";
 import { redPinMarker } from "./layers.ts";
 
@@ -18,6 +18,9 @@ const useStore = defineStore("store", {
       simulationState: "idle",
       isAdmin: false,
       adminToken: localStorage.getItem("adminToken") || "",
+      clientHardware: "v3" as string,
+      clientAntenna: "bingfu_whip" as string,
+      matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
         transmitter: {
           name: randanimalSync(),
@@ -60,6 +63,54 @@ const useStore = defineStore("store", {
     };
   },
   actions: {
+    async loadMatrixConfig(): Promise<void> {
+      try {
+        const response = await fetch("/matrix/config");
+        if (response.ok) {
+          this.matrixConfig = await response.json();
+        }
+      } catch (err) {
+        console.warn("Error loading matrix config:", err);
+      }
+    },
+    async swapSimulationLayer(towerId: string, simId: string): Promise<void> {
+      try {
+        const resultResponse = await fetch(`/simulations/${simId}/result`);
+        if (!resultResponse.ok) {
+          console.warn("Failed to fetch simulation result:", resultResponse.statusText);
+          return;
+        }
+        const arrayBuffer = await resultResponse.arrayBuffer();
+        const geoRaster = await parseGeoraster(arrayBuffer);
+
+        // Find the site matching this tower
+        const site = this.localSites.find((s: Site) => s.taskId === towerId);
+        if (!site) {
+          console.warn("No site found for tower:", towerId);
+          return;
+        }
+
+        // Remove old layer if present
+        if (site.layer && this.map) {
+          this.map.removeLayer(site.layer);
+        }
+
+        const minDbm = site.params?.display?.min_dbm ?? -130;
+        const maxDbm = site.params?.display?.max_dbm ?? -80;
+        const hex = site.color || "#4a90d9";
+        const rasterLayer = new GeoRasterLayer({
+          georaster: geoRaster,
+          resolution: 256,
+          pixelValuesToColorFn: (values: number[]) => dbmToRgba(values[0], hex, minDbm, maxDbm),
+        });
+        rasterLayer.addTo(this.map as L.Map);
+        rasterLayer.bringToFront();
+        site.raster = geoRaster;
+        site.layer = rasterLayer;
+      } catch (err) {
+        console.warn("Error swapping simulation layer:", err);
+      }
+    },
     async login(password: string): Promise<boolean> {
       try {
         const response = await fetch("/auth/login", {

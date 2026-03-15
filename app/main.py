@@ -33,6 +33,9 @@ from app.colors import next_tower_color
 from app.db import db_connection, init_db
 from app.db.connection import DEFAULT_DB_PATH
 from app.matrix import (
+    ANTENNA_RX_PARAMS,
+    HARDWARE_RX_PARAMS,
+    get_matrix_combinations,
     get_matrix_config,
     set_matrix_config,
 )
@@ -93,6 +96,57 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
             conn.commit()
 
 
+def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) -> None:
+    """Run all pending matrix simulations for a tower.
+
+    Each pending simulation row is processed independently — a failure in one
+    does not prevent the others from completing.
+    """
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, client_hardware, client_antenna, terrain_model "
+            "FROM simulations WHERE tower_id = ? AND status = 'pending'",
+            (tower_id,),
+        ).fetchall()
+
+    for row in rows:
+        sim_id = row["id"]
+        hw_key = row["client_hardware"]
+        ant_key = row["client_antenna"]
+
+        try:
+            overrides: dict[str, Any] = {}
+            hw_params = HARDWARE_RX_PARAMS.get(hw_key, {})
+            ant_params = ANTENNA_RX_PARAMS.get(ant_key, {})
+
+            if "rx_sensitivity" in hw_params:
+                overrides["signal_threshold"] = hw_params["rx_sensitivity"]
+            if "rx_gain" in ant_params:
+                overrides["rx_gain"] = ant_params["rx_gain"]
+            if "swr" in ant_params:
+                overrides["swr"] = ant_params["swr"]
+
+            modified_request = payload.model_copy(update=overrides)
+            geotiff_data: bytes = splat_service.coverage_prediction(modified_request)
+
+            with db_connection() as conn:
+                conn.execute(
+                    "UPDATE simulations SET geotiff = ?, status = 'completed' WHERE id = ?",
+                    (geotiff_data, sim_id),
+                )
+                conn.commit()
+                logger.info("Simulation %s completed.", sim_id)
+
+        except Exception as e:
+            logger.error("Simulation %s failed: %s", sim_id, e)
+            with db_connection() as conn:
+                conn.execute(
+                    "UPDATE simulations SET status = 'failed', error = ? WHERE id = ?",
+                    (str(e), sim_id),
+                )
+                conn.commit()
+
+
 @app.post("/predict", dependencies=[Depends(require_admin)])
 async def predict(
     payload: CoveragePredictionRequest,
@@ -127,9 +181,22 @@ async def predict(
             "INSERT INTO tasks (id, tower_id, status) VALUES (?, ?, ?)",
             (task_id, tower_id, "processing"),
         )
+
+        # Create simulation rows for each matrix combination
+        config = get_matrix_config(conn)
+        combinations = get_matrix_combinations(config)
+        for combo in combinations:
+            sim_id = str(uuid4())
+            conn.execute(
+                "INSERT INTO simulations (id, tower_id, client_hardware, client_antenna, terrain_model) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (sim_id, tower_id, combo["hardware"], combo["antenna"], combo["terrain"]),
+            )
+
         conn.commit()
 
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
+    background_tasks.add_task(run_matrix_simulations, tower_id, payload)
     return JSONResponse({"task_id": task_id, "tower_id": tower_id})
 
 
@@ -243,6 +310,77 @@ async def delete_tower(tower_id: str) -> JSONResponse:
 
     logger.info("Tower %s deleted.", tower_id)
     return JSONResponse({"message": "Tower deleted", "tower_id": tower_id})
+
+
+# ---------------------------------------------------------------------------
+# Simulation endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/towers/{tower_id}/simulations")
+async def list_tower_simulations(tower_id: str) -> JSONResponse:
+    """Return all simulations for a tower (without GeoTIFF blobs).
+
+    Args:
+        tower_id: The unique identifier for the tower.
+
+    Returns:
+        JSONResponse with a list of simulation objects.
+    """
+    with db_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, client_hardware, client_antenna, terrain_model, status, created_at "
+            "FROM simulations WHERE tower_id = ?",
+            (tower_id,),
+        ).fetchall()
+
+    simulations = [
+        {
+            "id": row["id"],
+            "client_hardware": row["client_hardware"],
+            "client_antenna": row["client_antenna"],
+            "terrain_model": row["terrain_model"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+    return JSONResponse({"simulations": simulations})
+
+
+@app.get("/simulations/{sim_id}/result", response_model=None)
+async def get_simulation_result(sim_id: str) -> JSONResponse | StreamingResponse:
+    """Return the GeoTIFF result for a completed simulation.
+
+    Args:
+        sim_id: The unique identifier for the simulation.
+
+    Returns:
+        StreamingResponse with the GeoTIFF on success, or JSONResponse with status/error.
+    """
+    with db_connection() as conn:
+        row = conn.execute(
+            "SELECT status, geotiff, error FROM simulations WHERE id = ?",
+            (sim_id,),
+        ).fetchone()
+
+    if row is None:
+        return JSONResponse({"error": "Simulation not found"}, status_code=404)
+
+    if row["status"] == "completed":
+        if row["geotiff"] is None:
+            return JSONResponse({"error": "No result found"}, status_code=500)
+        geotiff_file = io.BytesIO(row["geotiff"])
+        return StreamingResponse(
+            geotiff_file,
+            media_type="image/tiff",
+            headers={"Content-Disposition": f"attachment; filename={sim_id}.tif"},
+        )
+
+    if row["status"] == "failed":
+        return JSONResponse({"sim_id": sim_id, "status": "failed", "error": row["error"]})
+
+    return JSONResponse({"sim_id": sim_id, "status": row["status"]})
 
 
 # ---------------------------------------------------------------------------

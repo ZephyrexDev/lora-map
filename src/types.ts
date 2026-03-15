@@ -1,3 +1,9 @@
+export interface MatrixConfig {
+  hardware: Record<string, boolean>;
+  antennas: Record<string, boolean>;
+  terrain: Record<string, boolean>;
+}
+
 export interface Site {
   params: SplatParams;
   taskId: string;

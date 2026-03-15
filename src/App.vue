@@ -150,6 +150,23 @@
                     </li>
                   </ul>
                 </li>
+                <li class="nav-item dropdown">
+                  <a
+                    class="nav-link dropdown-toggle"
+                    href="#"
+                    role="button"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                  >
+                    Matrix Config
+                  </a>
+                  <ul class="dropdown-menu dropdown-menu-dark p-3">
+                    <li>
+                      <MatrixConfig />
+                    </li>
+                  </ul>
+                </li>
               </ul>
               <div class="mt-3 d-flex gap-2">
                 <button
@@ -168,22 +185,15 @@
                   <span class="button-text">{{ buttonText() }}</span>
                 </button>
               </div>
+              <h6 class="text-light mt-4 mb-2">Client View</h6>
+              <ClientSelector />
             </template>
-            <div v-else class="text-center text-secondary mt-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="32"
-                height="32"
-                fill="currentColor"
-                class="mb-2"
-                viewBox="0 0 16 16"
-              >
-                <path
-                  d="M1 8a7 7 0 1 0 14 0A7 7 0 0 0 1 8m15 0A8 8 0 1 1 0 8a8 8 0 0 1 16 0M9.283 4.002V12H7.971V5.338h-.065L6.072 6.656V5.385l1.899-1.383z"
-                />
-              </svg>
-              <p class="mb-1"><strong>View Only</strong></p>
-              <p class="small">Log in as admin to edit parameters and run simulations.</p>
+            <div v-else class="mt-3">
+              <h6 class="text-light mb-2">Your Setup</h6>
+              <ClientSelector />
+              <div class="text-center text-secondary mt-3">
+                <p class="small mb-0">Log in as admin to edit parameters and run simulations.</p>
+              </div>
             </div>
             <h6 class="text-light mt-4 mb-2">Towers</h6>
             <TowerList />
@@ -206,6 +216,8 @@ import Receiver from "./components/Receiver.vue";
 import Environment from "./components/Environment.vue";
 import Simulation from "./components/Simulation.vue";
 import Display from "./components/Display.vue";
+import MatrixConfig from "./components/MatrixConfig.vue";
+import ClientSelector from "./components/ClientSelector.vue";
 import TowerList from "./components/TowerList.vue";
 import LoginForm from "./components/LoginForm.vue";
 
