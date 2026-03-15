@@ -7,6 +7,7 @@ using the ITM (Irregular Terrain Model) via SPLAT! (https://github.com/jmcmellen
 Data is persisted to a local SQLite database.
 """
 
+import dataclasses
 import io
 import json
 import logging
@@ -312,7 +313,7 @@ async def predict(
 
         conn.commit()
 
-    _deadzone_cache["result"] = None
+    _deadzone_cache.result = None
 
     background_tasks.add_task(run_splat, task_id, tower_id, payload)
     background_tasks.add_task(run_matrix_simulations, tower_id, payload)
@@ -387,12 +388,12 @@ async def list_towers() -> TowerListResponse:
     return TowerListResponse(towers=towers)
 
 
-@app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)])
+@app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)], response_model=None)
 async def delete_tower(tower_id: str) -> DeleteResponse | JSONResponse:
     """Delete a tower and its associated tasks (via CASCADE)."""
     result = _delete_row("towers", "id", tower_id, "Tower")
     if isinstance(result, DeleteResponse):
-        _deadzone_cache["result"] = None
+        _deadzone_cache.result = None
     return result
 
 
@@ -632,9 +633,19 @@ async def delete_tower_path(path_id: str) -> DeleteResponse | JSONResponse:
 # Deadzone analysis endpoint
 # ---------------------------------------------------------------------------
 
-# In-memory cache for deadzone analysis results.  Invalidated in predict()
-# and delete_tower() when the tower set changes.
-_deadzone_cache: dict[str, Any] = {"tower_count": 0, "result": None}
+
+@dataclasses.dataclass
+class _DeadzoneCache:
+    """In-memory cache for deadzone analysis results.
+
+    Invalidated in predict() and delete_tower() when the tower set changes.
+    """
+
+    tower_count: int = 0
+    result: DeadzoneAnalysisResponse | None = None
+
+
+_deadzone_cache = _DeadzoneCache()
 
 
 @app.get("/deadzones", response_model=DeadzoneAnalysisResponse)
@@ -653,14 +664,14 @@ async def get_deadzones() -> DeadzoneAnalysisResponse | JSONResponse:
             status_code=400,
         )
 
-    if _deadzone_cache["result"] is not None and _deadzone_cache["tower_count"] == len(geotiff_blobs):
-        return _deadzone_cache["result"]
+    if _deadzone_cache.result is not None and _deadzone_cache.tower_count == len(geotiff_blobs):
+        return _deadzone_cache.result
 
     try:
         analyzer = DeadzoneAnalyzer(geotiff_blobs)
         result = analyzer.analyze()
-        _deadzone_cache["tower_count"] = len(geotiff_blobs)
-        _deadzone_cache["result"] = result
+        _deadzone_cache.tower_count = len(geotiff_blobs)
+        _deadzone_cache.result = result
         return result
     except Exception as e:
         logger.error("Deadzone analysis failed: %s", e)

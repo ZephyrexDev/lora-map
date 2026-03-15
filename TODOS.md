@@ -250,6 +250,10 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] `list_tower_paths` parses `json.loads()` 4× per row — parse once per params blob
 - [x] Remove redundant `SrtmProvider.__init__` that only calls `super().__init__()`
 
+### CLAUDE.md norm violations (round 4)
+- [x] `db_connection()` missing return type annotation — add `Generator[sqlite3.Connection, None, None]`
+- [x] `_deadzone_cache: dict[str, Any]` is untyped module-level mutable state — replace with typed `_DeadzoneCache` dataclass
+
 ## 16. Mobile / responsive design
 
 ### Critical

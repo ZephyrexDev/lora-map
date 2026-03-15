@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -41,7 +42,7 @@ def get_db(db_path: str | None = None) -> sqlite3.Connection:
 
 
 @contextmanager
-def db_connection(db_path: str | None = None):
+def db_connection(db_path: str | None = None) -> Generator[sqlite3.Connection, None, None]:
     """Context manager that yields a configured SQLite connection and closes it on exit.
 
     Parameters
