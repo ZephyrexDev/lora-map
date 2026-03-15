@@ -107,7 +107,27 @@ Towers have fixed hardware/antenna/height configs set by admin. The matrix varie
 - [x] `app/db/schema.py` — have `init_db()` use `get_db()` instead of opening its own raw connection (duplicates PRAGMA setup)
 - [x] `pyproject.toml` — `haversine` is listed as a dependency but never imported (already removed)
 
-## 11. Meshcore tower path simulation
+## 11. Per-tower color rendering & overlap hatching
+
+Each tower gets a user-assigned color. Coverage is rendered as that solid color with alpha proportional to signal strength. Where multiple towers overlap, the area uses cross-hatched line shading — each tower's lines drawn in its color, with line thickness proportional to that tower's signal strength (stronger signal = thicker lines).
+
+### Phase 1 — Per-tower solid color rendering
+- [ ] Add `color` field to towers table (hex string, e.g., "#ff0000") and Site/SplatParams types
+- [ ] Add color picker to tower creation form (admin) with sensible defaults (cycle through a palette)
+- [ ] Replace matplotlib colormap rendering with single-color + alpha: use `pixelValuesToColorFn` on GeoRasterLayer to map dBm → alpha on the tower's color
+- [ ] Backend: generate "raw dBm" GeoTIFFs (no colormap baked in) so frontend controls visualization
+- [ ] Store raw dBm GeoTIFFs — colormap is now a frontend concern, not baked into the raster
+
+### Phase 2 — Overlap detection & hatched rendering
+- [ ] Create a custom Leaflet canvas layer (`OverlapHatchLayer`) that composites all visible tower rasters
+- [ ] For each pixel, determine which towers have coverage (signal above threshold)
+- [ ] Single-tower pixel → solid color + alpha based on signal strength
+- [ ] Multi-tower pixel → draw diagonal stripes per tower, each in that tower's color
+- [ ] Line thickness scales with signal strength relative to other towers at that pixel (stronger = thicker lines)
+- [ ] Each tower gets a unique stripe angle (e.g., tower A = 45°, tower B = 135°) for natural cross-hatching
+- [ ] Toggle between "hatched overlap" and "simple alpha blend" modes in display settings
+
+## 12. Meshcore tower path simulation
 
 - [ ] Add SPLAT! point-to-point analysis function in `app/services/splat.py`
 - [ ] Add `POST /tower-paths` endpoint that runs pairwise P2P between selected towers
