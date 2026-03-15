@@ -91,21 +91,21 @@ Towers have fixed hardware/antenna/height configs set by admin. The matrix varie
 - **LULC-burned clutter** — SRTM bare-earth tiles with per-pixel clutter heights added from ESA WorldCover (10m, global, free). Land cover classes map to clutter heights (e.g., forest=12m, suburban=8m, urban=20m, cropland=0m, water=0m). Synthetic but global coverage with no DSM gaps
 
 ### Admin matrix configuration
-- [ ] Store enabled matrix members in SQLite settings table (or JSON column): `{"hardware": ["v3", "v4"], "antennas": ["bingfu_whip", "slinkdsco_omni"], "terrain": ["bare_earth", "lulc_clutter"]}`
-- [ ] Add admin UI panel to toggle individual members on each axis (checkboxes per hardware, antenna, terrain model)
+- [x] Store enabled matrix members in SQLite settings table (or JSON column): `{"hardware": ["v3", "v4"], "antennas": ["bingfu_whip", "slinkdsco_omni"], "terrain": ["bare_earth", "lulc_clutter"]}`
+- [x] Add admin UI panel to toggle individual members on each axis (checkboxes per hardware, antenna, terrain model)
 - [ ] Changing the enabled set triggers delta computation: queue only the new combinations, don't re-run existing ones
 - [ ] Disabling a member hides it from the visitor selector but retains cached results (can be re-enabled without re-simulating)
 
 ### Simulation & storage
-- [ ] Matrix varies receiver gain, sensitivity, SWR mismatch loss, and terrain model — tower TX params stay fixed
-- [ ] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower
-- [ ] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna + terrain_model
-- [ ] On tower creation, auto-queue the enabled matrix combinations as background tasks
+- [x] Matrix varies receiver gain, sensitivity, SWR mismatch loss, and terrain model — tower TX params stay fixed
+- [x] Add backend endpoint or CLI command to batch-run matrix simulations for a given tower
+- [x] Store each matrix result as a separate GeoTIFF in SQLite, keyed by tower_id + client_hardware + client_antenna + terrain_model
+- [x] On tower creation, auto-queue the enabled matrix combinations as background tasks
 - [ ] Show matrix completion progress in admin UI (e.g., "8/12 simulations complete")
 
 ### Visitor UI
-- [ ] Add selectors for visitors to pick their client hardware + antenna + terrain model — only enabled options shown
-- [ ] Instantly display the matching cached coverage layer (no simulation round-trip for visitors)
+- [x] Add selectors for visitors to pick their client hardware + antenna + terrain model — only enabled options shown
+- [x] Instantly display the matching cached coverage layer (no simulation round-trip for visitors)
 
 ## 9. Frontend performance refactors (`src/store.ts`)
 
@@ -138,8 +138,8 @@ Where multiple towers overlap, the area uses cross-hatched line shading — each
 - [x] Add color picker to tower creation form (admin), cycling through a 24-color palette: all permutations of `{0, 128, 255}` on R, G, B excluding greyscale `(0,0,0)`, `(128,128,128)`, `(255,255,255)`
 - [x] Replace matplotlib colormap rendering with single-color + alpha: use `pixelValuesToColorFn` on GeoRasterLayer to map dBm → alpha on the tower's color
 - [x] Alpha mapping: 10% transparency (alpha ≈ 230) at `signal_threshold` (minimum receivable), linearly scaling to 80% transparency (alpha ≈ 51) at max dBm (perfect reception). Pixels below threshold get alpha 0 (fully transparent / no coverage).
-- [ ] Backend: generate "raw dBm" GeoTIFFs (no colormap baked in) so frontend controls visualization
-- [ ] Store raw dBm GeoTIFFs — colormap is now a frontend concern, not baked into the raster
+- [x] Backend: generate "raw dBm" GeoTIFFs (reverse-map PPM colors to dBm via DCF LUT)
+- [x] Store raw dBm GeoTIFFs — colormap is now a frontend concern, not baked into the raster
 
 ### Phase 2 — Overlap detection & hatched rendering
 - [ ] Create a custom Leaflet canvas layer (`OverlapHatchLayer`) that composites all visible tower rasters
