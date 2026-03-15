@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { useStore } from "../store.ts";
+import { arrayToRecord } from "../utils.ts";
 import type { MatrixConfig } from "../types.ts";
 
 const store = useStore();
@@ -87,14 +88,6 @@ const config = reactive<MatrixConfig>({
   },
   terrain: { bare_earth: true },
 });
-
-function arrayToRecord(arr: string[], allKeys: string[]): Record<string, boolean> {
-  const result: Record<string, boolean> = {};
-  for (const key of allKeys) {
-    result[key] = arr.includes(key);
-  }
-  return result;
-}
 
 onMounted(async () => {
   try {

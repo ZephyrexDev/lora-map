@@ -50,6 +50,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useStore } from "../store.ts";
+import { isTiffBuffer } from "../utils.ts";
 
 const store = useStore();
 const pendingMessage = ref("");
@@ -136,13 +137,9 @@ async function onSelectionChange() {
           );
           if (aggResponse.ok) {
             const arrayBuffer = await aggResponse.arrayBuffer();
-            // Check if it's a GeoTIFF (starts with TIFF magic bytes) vs JSON error
-            if (arrayBuffer.byteLength > 0) {
-              const firstBytes = new Uint8Array(arrayBuffer.slice(0, 2));
-              if (firstBytes[0] === 0x49 || firstBytes[0] === 0x4d) {
-                await store.swapSimulationLayerFromBuffer(site.taskId, arrayBuffer);
-                continue;
-              }
+            if (isTiffBuffer(arrayBuffer)) {
+              await store.swapSimulationLayerFromBuffer(site.taskId, arrayBuffer);
+              continue;
             }
           }
           pendingMessage.value = "Aggregate requires all 3 base terrain simulations";

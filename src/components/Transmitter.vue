@@ -227,6 +227,7 @@ import * as bootstrap from "bootstrap";
 import { useStore } from "../store.ts";
 import { onMounted, onUnmounted, ref, computed } from "vue";
 import { redPinMarker } from "../layers.ts";
+import { dbmToWatts } from "../utils.ts";
 import { HARDWARE_PRESETS } from "../presets/hardware.ts";
 import { FREQUENCY_PRESETS } from "../presets/frequencies.ts";
 import { ANTENNA_PRESETS, mismatchLoss } from "../presets/antennas.ts";
@@ -261,8 +262,7 @@ function onHardwareChange() {
   if (selectedHardware.value < 0) return;
   const preset = HARDWARE_PRESETS[selectedHardware.value];
   if (!preset || preset.is_custom) return;
-  // Convert dBm to watts: W = 10^((dBm - 30) / 10)
-  transmitter.tx_power = parseFloat(Math.pow(10, (preset.max_power_dbm - 30) / 10).toFixed(4));
+  transmitter.tx_power = dbmToWatts(preset.max_power_dbm);
 }
 
 function onRegionChange() {

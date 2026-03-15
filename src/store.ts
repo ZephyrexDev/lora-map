@@ -12,26 +12,10 @@ import {
   type DeadzoneAnalysis,
   type TowerInfo,
 } from "./types.ts";
-import { cloneObject, pathLossColor } from "./utils.ts";
+import { cloneObject, pathLossColor, TOWER_COLORS, buildSimulationPayload } from "./utils.ts";
 import { redPinMarker } from "./layers.ts";
 import { createOverlapHatchLayer } from "./layers/OverlapHatchLayer.ts";
 import { DeadzoneCanvasLayer } from "./deadzoneLayer.ts";
-
-// Default tower colors for visual differentiation
-const TOWER_COLORS = [
-  "#e6194b", // red
-  "#3cb44b", // green
-  "#4363d8", // blue
-  "#f58231", // orange
-  "#911eb4", // purple
-  "#42d4f4", // cyan
-  "#f032e6", // magenta
-  "#bfef45", // lime
-  "#fabed4", // pink
-  "#469990", // teal
-  "#dcbeff", // lavender
-  "#9a6324", // brown
-];
 
 const useStore = defineStore("store", {
   state() {
@@ -574,41 +558,7 @@ const useStore = defineStore("store", {
     },
     async runSimulation() {
       try {
-        // Collect input values
-        const payload = {
-          // Transmitter parameters
-          lat: this.splatParams.transmitter.tx_lat,
-          lon: this.splatParams.transmitter.tx_lon,
-          tx_height: this.splatParams.transmitter.tx_height,
-          tx_power: 10 * Math.log10(this.splatParams.transmitter.tx_power) + 30,
-          tx_gain: this.splatParams.transmitter.tx_gain,
-          frequency_mhz: this.splatParams.transmitter.tx_freq,
-
-          // Receiver parameters
-          rx_height: this.splatParams.receiver.rx_height,
-          rx_gain: this.splatParams.receiver.rx_gain,
-          signal_threshold: this.splatParams.receiver.rx_sensitivity,
-          system_loss: this.splatParams.receiver.rx_loss,
-
-          // Environment parameters
-          clutter_height: this.splatParams.environment.clutter_height,
-          ground_dielectric: this.splatParams.environment.ground_dielectric,
-          ground_conductivity: this.splatParams.environment.ground_conductivity,
-          atmosphere_bending: this.splatParams.environment.atmosphere_bending,
-          radio_climate: this.splatParams.environment.radio_climate,
-          polarization: this.splatParams.environment.polarization,
-
-          // Simulation parameters
-          radius: this.splatParams.simulation.simulation_extent * 1000,
-          situation_fraction: this.splatParams.simulation.situation_fraction,
-          time_fraction: this.splatParams.simulation.time_fraction,
-          high_resolution: this.splatParams.simulation.high_resolution,
-
-          // Display parameters
-          colormap: this.splatParams.display.color_scale,
-          min_dbm: this.splatParams.display.min_dbm,
-          max_dbm: this.splatParams.display.max_dbm,
-        };
+        const payload = buildSimulationPayload(this.splatParams);
 
         this.simulationState = "running";
         this.simulationError = "";
