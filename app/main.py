@@ -5,13 +5,6 @@ Provides endpoints to predict radio signal coverage
 using the ITM (Irregular Terrain Model) via SPLAT! (https://github.com/jmcmellen/splat).
 
 Data is persisted to a local SQLite database.
-
-Endpoints:
-    - POST /predict: Accepts a signal coverage prediction request and starts a background task.
-    - GET /status/{task_id}: Retrieves the status of a given prediction task.
-    - GET /result/{task_id}: Retrieves the result (GeoTIFF file) of a given prediction task.
-    - GET /towers: Lists all towers.
-    - DELETE /towers/{tower_id}: Deletes a tower and its associated tasks.
 """
 
 import io
@@ -42,6 +35,7 @@ from app.matrix import (
 )
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.models.DeadzoneResponse import DeadzoneAnalysisResponse
+from app.models.MatrixConfigRequest import MatrixConfigRequest
 from app.models.TowerPathsRequest import TowerPathsRequest
 from app.services.aggregate import compute_weighted_aggregate
 from app.services.deadzone import DeadzoneAnalyzer
@@ -66,39 +60,83 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(auth_router)
 
 
-def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -> None:
-    """Execute the SPLAT! coverage prediction and persist results to SQLite.
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
 
-    Args:
-        task_id: UUID identifier for the task.
-        tower_id: UUID identifier for the tower.
-        request: The parameters for the SPLAT! prediction.
-    """
+
+def _geotiff_response_or_status(
+    status: str,
+    geotiff: bytes | None,
+    error: str | None,
+    resource_id: str,
+) -> JSONResponse | StreamingResponse:
+    """Return a GeoTIFF StreamingResponse if completed, or a status JSONResponse."""
+    if status == "completed":
+        if geotiff is None:
+            return JSONResponse({"error": "No result found"}, status_code=500)
+        return StreamingResponse(
+            io.BytesIO(geotiff),
+            media_type="image/tiff",
+            headers={"Content-Disposition": f"attachment; filename={resource_id}.tif"},
+        )
+    if status == "failed":
+        return JSONResponse({"id": resource_id, "status": "failed", "error": error})
+    return JSONResponse({"id": resource_id, "status": status})
+
+
+def _delete_row(table: str, id_column: str, row_id: str, label: str) -> JSONResponse:
+    """Delete a row by ID, returning 404 if not found."""
+    with db_connection() as conn:
+        cursor = conn.execute(f"DELETE FROM {table} WHERE {id_column} = ?", (row_id,))  # noqa: S608
+        conn.commit()
+    if cursor.rowcount == 0:
+        return JSONResponse({"error": f"{label} not found"}, status_code=404)
+    logger.info("%s %s deleted.", label, row_id)
+    return JSONResponse({"message": f"{label} deleted", "id": row_id})
+
+
+def _run_simulation_task(
+    run_fn: callable,
+    on_success: callable,
+    on_failure: callable,
+    label: str,
+) -> None:
+    """Execute a simulation function with standardized success/failure DB updates."""
     try:
-        logger.info("Starting SPLAT! coverage prediction for task %s.", task_id)
-        geotiff_data: bytes = splat_service.coverage_prediction(request)
+        result = run_fn()
+        on_success(result)
+    except Exception as e:
+        logger.error("%s failed: %s", label, e)
+        on_failure(str(e))
 
+
+# ---------------------------------------------------------------------------
+# Background tasks
+# ---------------------------------------------------------------------------
+
+
+def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -> None:
+    """Execute the SPLAT! coverage prediction and persist results to SQLite."""
+
+    def execute():
+        logger.info("Starting SPLAT! coverage prediction for task %s.", task_id)
+        return splat_service.coverage_prediction(request)
+
+    def on_success(geotiff_data: bytes):
         with db_connection() as conn:
             now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
-            conn.execute(
-                "UPDATE towers SET geotiff = ?, updated_at = ? WHERE id = ?",
-                (geotiff_data, now, tower_id),
-            )
-            conn.execute(
-                "UPDATE tasks SET status = ? WHERE id = ?",
-                ("completed", task_id),
-            )
+            conn.execute("UPDATE towers SET geotiff = ?, updated_at = ? WHERE id = ?", (geotiff_data, now, tower_id))
+            conn.execute("UPDATE tasks SET status = 'completed' WHERE id = ?", (task_id,))
             conn.commit()
-            logger.info("Task %s completed successfully.", task_id)
+        logger.info("Task %s completed successfully.", task_id)
 
-    except Exception as e:
-        logger.error("Error in SPLAT! task %s: %s", task_id, e)
+    def on_failure(error_msg: str):
         with db_connection() as conn:
-            conn.execute(
-                "UPDATE tasks SET status = ?, error = ? WHERE id = ?",
-                ("failed", str(e), task_id),
-            )
+            conn.execute("UPDATE tasks SET status = 'failed', error = ? WHERE id = ?", (error_msg, task_id))
             conn.commit()
+
+    _run_simulation_task(execute, on_success, on_failure, f"Task {task_id}")
 
 
 def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) -> None:
@@ -116,59 +154,49 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
 
     for row in rows:
         sim_id = row["id"]
-        hw_key = row["client_hardware"]
-        ant_key = row["client_antenna"]
-        terrain_key = row["terrain_model"]
 
-        try:
-            overrides: dict[str, Any] = {"terrain_model": terrain_key}
-            hw_params = HARDWARE_RX_PARAMS.get(hw_key, {})
-            ant_params = ANTENNA_RX_PARAMS.get(ant_key, {})
-
+        def execute(r=row):
+            overrides: dict[str, Any] = {"terrain_model": r["terrain_model"]}
+            hw_params = HARDWARE_RX_PARAMS.get(r["client_hardware"], {})
+            ant_params = ANTENNA_RX_PARAMS.get(r["client_antenna"], {})
             if "rx_sensitivity" in hw_params:
                 overrides["signal_threshold"] = hw_params["rx_sensitivity"]
             if "rx_gain" in ant_params:
                 overrides["rx_gain"] = ant_params["rx_gain"]
             if "swr" in ant_params:
                 overrides["swr"] = ant_params["swr"]
+            return splat_service.coverage_prediction(payload.model_copy(update=overrides))
 
-            modified_request = payload.model_copy(update=overrides)
-            geotiff_data: bytes = splat_service.coverage_prediction(modified_request)
-
+        def on_success(geotiff_data: bytes, sid=sim_id):
             with db_connection() as conn:
                 conn.execute(
-                    "UPDATE simulations SET geotiff = ?, status = 'completed' WHERE id = ?",
-                    (geotiff_data, sim_id),
+                    "UPDATE simulations SET geotiff = ?, status = 'completed' WHERE id = ?", (geotiff_data, sid)
                 )
                 conn.commit()
-                logger.info("Simulation %s completed.", sim_id)
+            logger.info("Simulation %s completed.", sid)
 
-        except Exception as e:
-            logger.error("Simulation %s failed: %s", sim_id, e)
+        def on_failure(error_msg: str, sid=sim_id):
             with db_connection() as conn:
-                conn.execute(
-                    "UPDATE simulations SET status = 'failed', error = ? WHERE id = ?",
-                    (str(e), sim_id),
-                )
+                conn.execute("UPDATE simulations SET status = 'failed', error = ? WHERE id = ?", (error_msg, sid))
                 conn.commit()
 
+        _run_simulation_task(execute, on_success, on_failure, f"Simulation {sim_id}")
 
-@app.post("/predict", dependencies=[Depends(require_admin)])
+
+# ---------------------------------------------------------------------------
+# Prediction endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/predict", dependencies=[Depends(require_admin)], status_code=201)
 async def predict(
     payload: CoveragePredictionRequest,
     background_tasks: BackgroundTasks,
 ) -> JSONResponse:
     """Submit a signal coverage prediction request.
 
-    Generates unique tower and task identifiers, persists initial rows to
-    SQLite, and queues the SPLAT! computation as a background task.
-
-    Args:
-        payload: The parameters required for the SPLAT! coverage prediction.
-        background_tasks: FastAPI background tasks.
-
-    Returns:
-        JSONResponse containing the task_id and tower_id.
+    Creates a tower and task, queues the SPLAT! computation as a background task.
+    Returns 201 Created with the task_id and tower_id.
     """
     task_id: str = str(uuid4())
     tower_id: str = str(uuid4())
@@ -231,24 +259,16 @@ async def predict(
             run_tower_path_analysis, path_row["tower_a_id"], path_row["tower_b_id"], path_row["id"]
         )
 
-    return JSONResponse({"task_id": task_id, "tower_id": tower_id})
+    return JSONResponse({"task_id": task_id, "tower_id": tower_id}, status_code=201)
 
 
 @app.get("/status/{task_id}")
 async def get_status(task_id: str) -> JSONResponse:
-    """Retrieve the status of a prediction task from SQLite.
-
-    Args:
-        task_id: The unique identifier for the task.
-
-    Returns:
-        JSONResponse with the task status, or 404 if not found.
-    """
+    """Retrieve the status of a prediction task from SQLite."""
     with db_connection() as conn:
         row = conn.execute("SELECT status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
     if row is None:
-        logger.warning("Task %s not found.", task_id)
         return JSONResponse({"error": "Task not found"}, status_code=404)
 
     response: dict[str, Any] = {"task_id": task_id, "status": row["status"]}
@@ -260,54 +280,28 @@ async def get_status(task_id: str) -> JSONResponse:
 
 @app.get("/result/{task_id}", response_model=None)
 async def get_result(task_id: str) -> JSONResponse | StreamingResponse:
-    """Retrieve the result of a prediction task.
-
-    If the task has completed, returns the GeoTIFF as a downloadable file.
-    If it is still processing or has failed, returns the current status.
-
-    Args:
-        task_id: The unique identifier for the task.
-
-    Returns:
-        StreamingResponse with the GeoTIFF on success, or JSONResponse with status.
-    """
+    """Retrieve the GeoTIFF result of a prediction task, or its current status."""
     with db_connection() as conn:
         task_row = conn.execute("SELECT tower_id, status, error FROM tasks WHERE id = ?", (task_id,)).fetchone()
-
         if task_row is None:
-            logger.warning("Task %s not found.", task_id)
             return JSONResponse({"error": "Task not found"}, status_code=404)
 
-        status: str = task_row["status"]
-
-        if status == "completed":
+        geotiff = None
+        if task_row["status"] == "completed":
             tower_row = conn.execute("SELECT geotiff FROM towers WHERE id = ?", (task_row["tower_id"],)).fetchone()
+            geotiff = tower_row["geotiff"] if tower_row else None
 
-            if tower_row is None or tower_row["geotiff"] is None:
-                logger.error("No GeoTIFF data found for completed task %s.", task_id)
-                return JSONResponse({"error": "No result found"}, status_code=500)
+    return _geotiff_response_or_status(task_row["status"], geotiff, task_row["error"], task_id)
 
-            geotiff_file = io.BytesIO(tower_row["geotiff"])
-            return StreamingResponse(
-                geotiff_file,
-                media_type="image/tiff",
-                headers={"Content-Disposition": f"attachment; filename={task_id}.tif"},
-            )
 
-        if status == "failed":
-            return JSONResponse({"task_id": task_id, "status": "failed", "error": task_row["error"]})
-
-        logger.info("Task %s is still processing.", task_id)
-        return JSONResponse({"task_id": task_id, "status": "processing"})
+# ---------------------------------------------------------------------------
+# Tower endpoints
+# ---------------------------------------------------------------------------
 
 
 @app.get("/towers")
 async def list_towers() -> JSONResponse:
-    """List all towers without their GeoTIFF blobs.
-
-    Returns:
-        JSONResponse with a list of tower objects.
-    """
+    """List all towers without their GeoTIFF blobs."""
     with db_connection() as conn:
         rows = conn.execute("SELECT id, name, color, params, created_at, updated_at FROM towers").fetchall()
 
@@ -327,26 +321,11 @@ async def list_towers() -> JSONResponse:
 
 @app.delete("/towers/{tower_id}", dependencies=[Depends(require_admin)])
 async def delete_tower(tower_id: str) -> JSONResponse:
-    """Delete a tower and its associated tasks (via CASCADE).
-
-    Args:
-        tower_id: The unique identifier for the tower.
-
-    Returns:
-        JSONResponse confirming deletion or 404 if not found.
-    """
-    with db_connection() as conn:
-        cursor = conn.execute("DELETE FROM towers WHERE id = ?", (tower_id,))
-        conn.commit()
-
-    if cursor.rowcount == 0:
-        return JSONResponse({"error": "Tower not found"}, status_code=404)
-
-    # Invalidate deadzone cache since tower set changed
-    _deadzone_cache["result"] = None
-
-    logger.info("Tower %s deleted.", tower_id)
-    return JSONResponse({"message": "Tower deleted", "tower_id": tower_id})
+    """Delete a tower and its associated tasks (via CASCADE)."""
+    result = _delete_row("towers", "id", tower_id, "Tower")
+    if result.status_code == 200:
+        _deadzone_cache["result"] = None
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -359,18 +338,7 @@ async def list_tower_simulations(
     tower_id: str,
     enabled_only: bool = Query(False, description="Filter to only simulations matching enabled matrix config members"),
 ) -> JSONResponse:
-    """Return all simulations for a tower (without GeoTIFF blobs).
-
-    When ``enabled_only=true``, only simulations whose hardware, antenna, and
-    terrain values are all currently enabled in the matrix config are returned.
-
-    Args:
-        tower_id: The unique identifier for the tower.
-        enabled_only: If true, filter by current matrix config enabled members.
-
-    Returns:
-        JSONResponse with a list of simulation objects.
-    """
+    """Return all simulations for a tower (without GeoTIFF blobs)."""
     with db_connection() as conn:
         rows = conn.execute(
             "SELECT id, client_hardware, client_antenna, terrain_model, status, created_at "
@@ -407,14 +375,7 @@ async def list_tower_simulations(
 
 @app.get("/simulations/{sim_id}/result", response_model=None)
 async def get_simulation_result(sim_id: str) -> JSONResponse | StreamingResponse:
-    """Return the GeoTIFF result for a completed simulation.
-
-    Args:
-        sim_id: The unique identifier for the simulation.
-
-    Returns:
-        StreamingResponse with the GeoTIFF on success, or JSONResponse with status/error.
-    """
+    """Return the GeoTIFF result for a completed simulation, or its current status."""
     with db_connection() as conn:
         row = conn.execute(
             "SELECT status, geotiff, error FROM simulations WHERE id = ?",
@@ -424,23 +385,10 @@ async def get_simulation_result(sim_id: str) -> JSONResponse | StreamingResponse
     if row is None:
         return JSONResponse({"error": "Simulation not found"}, status_code=404)
 
-    if row["status"] == "completed":
-        if row["geotiff"] is None:
-            return JSONResponse({"error": "No result found"}, status_code=500)
-        geotiff_file = io.BytesIO(row["geotiff"])
-        return StreamingResponse(
-            geotiff_file,
-            media_type="image/tiff",
-            headers={"Content-Disposition": f"attachment; filename={sim_id}.tif"},
-        )
-
-    if row["status"] == "failed":
-        return JSONResponse({"sim_id": sim_id, "status": "failed", "error": row["error"]})
-
-    return JSONResponse({"sim_id": sim_id, "status": row["status"]})
+    return _geotiff_response_or_status(row["status"], row["geotiff"], row["error"], sim_id)
 
 
-@app.get("/simulations/{tower_id}/aggregate", response_model=None)
+@app.get("/towers/{tower_id}/aggregate", response_model=None)
 async def get_aggregate_simulation(
     tower_id: str,
     client_hardware: str = Query(..., description="Client hardware key"),
@@ -515,9 +463,7 @@ async def get_matrix_config_endpoint() -> JSONResponse:
 
 
 @app.put("/matrix/config", dependencies=[Depends(require_admin)])
-async def put_matrix_config_endpoint(
-    body: dict[str, Any],
-) -> JSONResponse:
+async def put_matrix_config_endpoint(body: MatrixConfigRequest) -> JSONResponse:
     """Update the matrix configuration (admin-only).
 
     Accepts a JSON body with keys ``hardware``, ``antennas``, and ``terrain``,
@@ -530,24 +476,15 @@ async def put_matrix_config_endpoint(
         ("antennas", _KNOWN_ANTENNAS),
         ("terrain", _KNOWN_TERRAIN),
     ]:
-        if key not in body:
-            errors.append(f"Missing required key: {key}")
-            continue
-        if not isinstance(body[key], list):
-            errors.append(f"{key} must be a list")
-            continue
-        unknown = set(body[key]) - known
+        values = getattr(body, key)
+        unknown = set(values) - known
         if unknown:
             errors.append(f"Unknown {key} values: {sorted(unknown)}")
 
     if errors:
-        return JSONResponse({"errors": errors}, status_code=400)
+        return JSONResponse({"errors": errors}, status_code=422)
 
-    config = {
-        "hardware": body["hardware"],
-        "antennas": body["antennas"],
-        "terrain": body["terrain"],
-    }
+    config = {"hardware": body.hardware, "antennas": body.antennas, "terrain": body.terrain}
 
     with db_connection() as conn:
         set_matrix_config(conn, config)
@@ -616,12 +553,12 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
             conn.commit()
 
 
-@app.post("/tower-paths", dependencies=[Depends(require_admin)])
+@app.post("/tower-paths", dependencies=[Depends(require_admin)], status_code=202)
 async def compute_tower_paths(
     background_tasks: BackgroundTasks,
     body: TowerPathsRequest | None = None,
 ) -> JSONResponse:
-    """Compute pairwise P2P paths between towers.
+    """Compute pairwise P2P paths between towers (async — returns 202 Accepted).
 
     Optionally accepts ``{"tower_ids": ["id1", "id2", ...]}`` to limit
     which towers are included. If omitted, all towers are used.
@@ -663,7 +600,7 @@ async def compute_tower_paths(
 
         conn.commit()
 
-    return JSONResponse({"paths": created_paths, "count": len(created_paths)})
+    return JSONResponse({"paths": created_paths, "count": len(created_paths)}, status_code=202)
 
 
 @app.get("/tower-paths")
@@ -704,14 +641,7 @@ async def list_tower_paths() -> JSONResponse:
 @app.delete("/tower-paths/{path_id}", dependencies=[Depends(require_admin)])
 async def delete_tower_path(path_id: str) -> JSONResponse:
     """Delete a specific tower path."""
-    with db_connection() as conn:
-        cursor = conn.execute("DELETE FROM tower_paths WHERE id = ?", (path_id,))
-        conn.commit()
-
-    if cursor.rowcount == 0:
-        return JSONResponse({"error": "Path not found"}, status_code=404)
-
-    return JSONResponse({"message": "Path deleted", "path_id": path_id})
+    return _delete_row("tower_paths", "id", path_id, "Path")
 
 
 # ---------------------------------------------------------------------------

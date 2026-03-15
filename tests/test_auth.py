@@ -14,7 +14,7 @@ AUTH_PASSWORD = "s3cret"
 
 class TestAuthDisabled:
     def test_post_predict_allowed(self, client, valid_payload):
-        assert client.post("/predict", json=valid_payload).status_code == 200
+        assert client.post("/predict", json=valid_payload).status_code == 201
 
     def test_delete_tower_allowed(self, client):
         tid = insert_tower()
@@ -67,9 +67,9 @@ class TestAuthEnabledWithValidToken:
     def _headers(self):
         return {"Authorization": f"Bearer {AUTH_PASSWORD}"}
 
-    def test_post_predict_200(self, client_with_auth, valid_payload):
+    def test_post_predict_201(self, client_with_auth, valid_payload):
         resp = client_with_auth.post("/predict", json=valid_payload, headers=self._headers())
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         assert "task_id" in resp.json()
 
     def test_delete_tower_200(self, client_with_auth):

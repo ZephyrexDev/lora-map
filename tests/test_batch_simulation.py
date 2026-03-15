@@ -18,7 +18,7 @@ class TestPredictCreatesSimulations:
         with patch("app.main.splat_service.coverage_prediction", return_value=b"FAKE"):
             resp = client.post("/predict", json=valid_payload)
 
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         tower_id = resp.json()["tower_id"]
 
         with db_connection() as conn:

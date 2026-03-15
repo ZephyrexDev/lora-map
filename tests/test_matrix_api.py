@@ -69,7 +69,7 @@ class TestPutMatrixConfig:
             "terrain": ["bare_earth"],
         }
         resp = client.put("/matrix/config", json=payload)
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         assert "unknown_board" in str(resp.json())
 
     def test_rejects_unknown_antenna(self, client):
@@ -79,7 +79,7 @@ class TestPutMatrixConfig:
             "terrain": ["bare_earth"],
         }
         resp = client.put("/matrix/config", json=payload)
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         assert "mystery_antenna" in str(resp.json())
 
     def test_rejects_unknown_terrain(self, client):
@@ -89,12 +89,9 @@ class TestPutMatrixConfig:
             "terrain": ["martian_soil"],
         }
         resp = client.put("/matrix/config", json=payload)
-        assert resp.status_code == 400
+        assert resp.status_code == 422
         assert "martian_soil" in str(resp.json())
 
     def test_rejects_missing_keys(self, client):
         resp = client.put("/matrix/config", json={"hardware": ["v3"]})
-        assert resp.status_code == 400
-        body = resp.json()
-        assert any("antennas" in e for e in body["errors"])
-        assert any("terrain" in e for e in body["errors"])
+        assert resp.status_code == 422

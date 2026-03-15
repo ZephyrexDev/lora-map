@@ -38,8 +38,6 @@ class Splat:
         splat_path: str,
         cache_dir: str = ".splat_tiles",
         cache_size_gb: float = 1.0,
-        bucket_name: str = "elevation-tiles-prod",
-        bucket_prefix: str = "v2/skadi",
     ):
         """
         SPLAT! wrapper class. Provides methods for generating SPLAT! RF coverage maps in GeoTIFF format.
@@ -58,10 +56,6 @@ class Splat:
             cache_size_gb (float): Maximum size of the cache in gigabytes (GB). Defaults to 1.0.
                 When the size of the cached tiles exceeds this value, the oldest tiles are deleted
                 and will be re-downloaded as required.
-            bucket_name (str): Name of the S3 bucket containing terrain tiles. Defaults to the AWS
-                open data bucket `elevation-tiles-prod`.
-            bucket_prefix (str): Folder in the S3 bucket containing the terrain tiles. Defaults to
-                `v2/skadi`, which contains 1-arcsecond terrain data for most of the world.
         """
 
         # Check the provided SPLAT! path exists
@@ -85,8 +79,6 @@ class Splat:
         self.tile_cache = Cache(cache_dir, size_limit=int(cache_size_gb * 1024 * 1024 * 1024))
 
         self.s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
-        self.bucket_name = bucket_name
-        self.bucket_prefix = bucket_prefix
 
         # Terrain providers
         srtm_provider = SrtmProvider(self.s3, self.tile_cache)
@@ -977,7 +969,9 @@ class Splat:
         if path_loss_db is None:
             logger.warning("Could not parse path loss from SPLAT! output, using free-space estimate.")
             # Free-space path loss: FSPL(dB) = 20*log10(d_km) + 20*log10(f_MHz) + 32.44
-            path_loss_db = (20 * math.log10(distance_km) + 20 * math.log10(frequency_mhz) + 32.44) if distance_km > 0 else 0.0
+            path_loss_db = (
+                (20 * math.log10(distance_km) + 20 * math.log10(frequency_mhz) + 32.44) if distance_km > 0 else 0.0
+            )
 
         return PointToPointResult(
             path_loss_db=path_loss_db,

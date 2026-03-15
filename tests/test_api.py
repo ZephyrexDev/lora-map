@@ -11,9 +11,9 @@ from tests.conftest import insert_task, insert_tower, set_tower_geotiff
 
 
 class TestPostPredict:
-    def test_returns_200_with_ids(self, client, valid_payload):
+    def test_returns_201_with_ids(self, client, valid_payload):
         resp = client.post("/predict", json=valid_payload)
-        assert resp.status_code == 200
+        assert resp.status_code == 201
         body = resp.json()
         assert "task_id" in body
         assert "tower_id" in body

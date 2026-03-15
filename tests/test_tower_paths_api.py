@@ -51,7 +51,7 @@ class TestPostTowerPaths:
         t1 = insert_tower(name="Tower A")
         t2 = insert_tower(name="Tower B")
         resp = client.post("/tower-paths")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
         body = resp.json()
         assert body["count"] == 1
         assert len(body["paths"]) == 1
@@ -62,7 +62,7 @@ class TestPostTowerPaths:
         for i in range(4):
             insert_tower(name=f"Tower {i}")
         resp = client.post("/tower-paths")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
         # 4 towers = 6 pairs (4 choose 2)
         assert resp.json()["count"] == 6
 
@@ -71,7 +71,7 @@ class TestPostTowerPaths:
         t2 = insert_tower(name="Tower B")
         insert_tower(name="Tower C")
         resp = client.post("/tower-paths", json={"tower_ids": [t1, t2]})
-        assert resp.status_code == 200
+        assert resp.status_code == 202
         assert resp.json()["count"] == 1
 
 
@@ -93,7 +93,9 @@ class TestDeleteTowerPath:
 
         resp = client.delete(f"/tower-paths/{path_id}")
         assert resp.status_code == 200
-        assert "deleted" in resp.json()["message"].lower()
+        body = resp.json()
+        assert "deleted" in body["message"].lower()
+        assert body["id"] == path_id
 
         with db_connection() as conn:
             assert conn.execute("SELECT * FROM tower_paths WHERE id = ?", (path_id,)).fetchone() is None
