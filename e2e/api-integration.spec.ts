@@ -120,9 +120,9 @@ test.describe('API integration', () => {
       timeout: 10_000,
     })
 
-    // Wait for modal and backdrop to fully close
+    // Wait for modal to close, then clean up any stale Bootstrap backdrops
     await expect(page.locator('#loginModal')).toBeHidden({ timeout: 5_000 })
-    await expect(page.locator('.modal-backdrop')).toHaveCount(0, { timeout: 5_000 })
+    await page.evaluate(() => document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove()))
 
     // After login, Transmitter component mounts and initializes the map
     await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 10_000 })

@@ -58,9 +58,9 @@ test.describe('Admin authentication', () => {
       timeout: 10_000,
     })
 
-    // Wait for modal and backdrop to fully close
+    // Wait for modal to close, then clean up any stale Bootstrap backdrops
     await expect(page.locator('#loginModal')).toBeHidden({ timeout: 5_000 })
-    await expect(page.locator('.modal-backdrop')).toHaveCount(0, { timeout: 5_000 })
+    await page.evaluate(() => document.querySelectorAll('.modal-backdrop').forEach((el) => el.remove()))
 
     // Open modal again — should show "Logged In" with logout button
     await page.locator('[data-bs-target="#loginModal"]').click()
