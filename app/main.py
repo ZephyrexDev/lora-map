@@ -209,11 +209,14 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
 
     def on_success(geotiff_data: bytes) -> None:
         with db_session() as session:
-            now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             tower = session.get(Tower, tower_id)
+            task = session.get(Task, task_id)
+            if tower is None or task is None:
+                logger.warning("Tower or task deleted before completion (task %s), skipping.", task_id)
+                return
+            now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             tower.geotiff = geotiff_data
             tower.updated_at = now
-            task = session.get(Task, task_id)
             task.status = "completed"
             session.commit()
         logger.info("Task %s completed successfully.", task_id)
@@ -221,6 +224,9 @@ def run_splat(task_id: str, tower_id: str, request: CoveragePredictionRequest) -
     def on_failure(error_msg: str) -> None:
         with db_session() as session:
             task = session.get(Task, task_id)
+            if task is None:
+                logger.warning("Task %s deleted before failure could be recorded.", task_id)
+                return
             task.status = "failed"
             task.error = error_msg
             session.commit()
@@ -257,6 +263,9 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
         def on_success(geotiff_data: bytes, sid: str = sim_id) -> None:
             with db_session() as session:
                 sim = session.get(Simulation, sid)
+                if sim is None:
+                    logger.warning("Simulation %s deleted before completion, skipping.", sid)
+                    return
                 sim.geotiff = geotiff_data
                 sim.status = "completed"
                 session.commit()
@@ -265,6 +274,9 @@ def run_matrix_simulations(tower_id: str, payload: CoveragePredictionRequest) ->
         def on_failure(error_msg: str, sid: str = sim_id) -> None:
             with db_session() as session:
                 sim = session.get(Simulation, sid)
+                if sim is None:
+                    logger.warning("Simulation %s deleted before failure could be recorded.", sid)
+                    return
                 sim.status = "failed"
                 sim.error = error_msg
                 session.commit()
@@ -296,6 +308,9 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
 
         with db_session() as session:
             path = session.get(TowerPath, path_id)
+            if path is None:
+                logger.warning("Tower path %s deleted before completion, skipping.", path_id)
+                return
             path.path_loss_db = result.path_loss_db
             path.has_los = int(result.has_los)
             path.distance_km = result.distance_km
@@ -313,6 +328,9 @@ def run_tower_path_analysis(tower_a_id: str, tower_b_id: str, path_id: str) -> N
         logger.error("Tower path %s failed: %s", path_id, e)
         with db_session() as session:
             path = session.get(TowerPath, path_id)
+            if path is None:
+                logger.warning("Tower path %s deleted before failure could be recorded.", path_id)
+                return
             path.status = "failed"
             path.error = str(e)
             session.commit()
