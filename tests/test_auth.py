@@ -147,16 +147,16 @@ class TestPublicEndpointsWithAuth:
 
 class TestRateLimit:
     def test_allows_up_to_max_attempts(self, client_with_auth):
-        for _ in range(5):
+        for _ in range(10):
             assert client_with_auth.post("/auth/login", json={"password": "wrong"}).status_code == 401
 
     def test_blocks_after_max_attempts(self, client_with_auth):
-        for _ in range(5):
+        for _ in range(10):
             client_with_auth.post("/auth/login", json={"password": "wrong"})
         assert client_with_auth.post("/auth/login", json={"password": "wrong"}).status_code == 429
 
     def test_correct_password_still_counted(self, client_with_auth):
-        for _ in range(5):
+        for _ in range(10):
             client_with_auth.post("/auth/login", json={"password": AUTH_PASSWORD})
         assert client_with_auth.post("/auth/login", json={"password": AUTH_PASSWORD}).status_code == 429
 
