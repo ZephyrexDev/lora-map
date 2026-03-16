@@ -57,7 +57,7 @@ def _validate_token(token: str) -> bool:
 # ---------------------------------------------------------------------------
 _rate_lock = threading.Lock()
 _login_attempts: dict[str, list[float]] = {}
-_MAX_ATTEMPTS = 5
+_MAX_ATTEMPTS = 10
 _WINDOW_SECONDS = 60
 _MAX_TRACKED_IPS = 10_000
 

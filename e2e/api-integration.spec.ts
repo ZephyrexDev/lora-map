@@ -122,7 +122,7 @@ test.describe('API integration', () => {
 
     // Wait for modal and backdrop to fully close
     await expect(page.locator('#loginModal')).toBeHidden({ timeout: 5_000 })
-    await expect(page.locator('.modal-backdrop')).toBeHidden({ timeout: 5_000 })
+    await expect(page.locator('.modal-backdrop')).toHaveCount(0, { timeout: 5_000 })
 
     // After login, Transmitter component mounts and initializes the map
     await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 10_000 })
