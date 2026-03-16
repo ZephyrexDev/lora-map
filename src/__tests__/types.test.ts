@@ -48,6 +48,11 @@ function makeSplatParams(): SplatParams {
       rx_height: 1.0,
       rx_gain: 2.0,
       rx_loss: 2.0,
+      window_mode: false,
+      window_azimuth: 0,
+      window_fov: 90,
+      glass_type: "double",
+      structural_material: "brick",
     },
     environment: {
       radio_climate: "continental_temperate",

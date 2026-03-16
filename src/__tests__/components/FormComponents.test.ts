@@ -49,9 +49,10 @@ describe("Receiver.vue", () => {
     expect(Number(store.splatParams.receiver.rx_height)).toBe(5);
   });
 
-  it("renders all four form fields", () => {
+  it("renders base form fields plus window mode toggle", () => {
     const wrapper = mount(Receiver);
-    expect(wrapper.findAll("input")).toHaveLength(4);
+    // 4 base inputs + 1 window_mode checkbox = 5 (azimuth/FOV hidden when off)
+    expect(wrapper.findAll("input")).toHaveLength(5);
   });
 });
 

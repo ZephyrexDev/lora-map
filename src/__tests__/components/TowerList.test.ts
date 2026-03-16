@@ -10,7 +10,17 @@ import type { SplatParams } from "../../types";
 function makeSplatParams(): SplatParams {
   return {
     transmitter: { name: "Tower A", tx_lat: 51, tx_lon: -114, tx_power: 0.1, tx_freq: 907, tx_height: 10, tx_gain: 2 },
-    receiver: { rx_sensitivity: -130, rx_height: 1, rx_gain: 2, rx_loss: 2 },
+    receiver: {
+      rx_sensitivity: -130,
+      rx_height: 1,
+      rx_gain: 2,
+      rx_loss: 2,
+      window_mode: false,
+      window_azimuth: 0,
+      window_fov: 90,
+      glass_type: "double",
+      structural_material: "brick",
+    },
     environment: {
       radio_climate: "continental_temperate",
       polarization: "vertical",

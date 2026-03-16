@@ -121,6 +121,11 @@ export interface SplatParams {
     rx_height: number;
     rx_gain: number;
     rx_loss: number;
+    window_mode: boolean;
+    window_azimuth: number;
+    window_fov: number;
+    glass_type: "single" | "double" | "triple";
+    structural_material: "drywall" | "brick" | "metal";
   };
   environment: {
     radio_climate: string;

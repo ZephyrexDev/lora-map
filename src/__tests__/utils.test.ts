@@ -299,6 +299,11 @@ describe("buildSimulationPayload", () => {
         rx_height: 1.5,
         rx_gain: 2.0,
         rx_loss: 1.5,
+        window_mode: false,
+        window_azimuth: 0,
+        window_fov: 90,
+        glass_type: "double",
+        structural_material: "brick",
       },
       environment: {
         radio_climate: "continental_temperate",
@@ -400,10 +405,12 @@ describe("buildSimulationPayload", () => {
   });
 
   it("all numeric values are numbers, not strings", () => {
+    const STRING_KEYS = new Set(["radio_climate", "polarization", "colormap", "glass_type", "structural_material"]);
+    const BOOLEAN_KEYS = new Set(["high_resolution", "window_mode"]);
     const payload = buildSimulationPayload(makeParams());
     for (const [key, value] of Object.entries(payload)) {
-      if (key === "radio_climate" || key === "polarization" || key === "colormap") continue;
-      if (key === "high_resolution") {
+      if (STRING_KEYS.has(key)) continue;
+      if (BOOLEAN_KEYS.has(key)) {
         expect(typeof value).toBe("boolean");
       } else {
         expect(typeof value).toBe("number");
@@ -422,5 +429,29 @@ describe("buildSimulationPayload", () => {
     expect(payload.rx_gain).toBe(2.0);
     expect(payload.radio_climate).toBe("continental_temperate");
     expect(payload.polarization).toBe("vertical");
+  });
+
+  it("includes window mode fields with defaults", () => {
+    const payload = buildSimulationPayload(makeParams());
+    expect(payload.window_mode).toBe(false);
+    expect(payload.window_azimuth).toBe(0);
+    expect(payload.window_fov).toBe(90);
+    expect(payload.glass_type).toBe("double");
+    expect(payload.structural_material).toBe("brick");
+  });
+
+  it("passes through window mode overrides", () => {
+    const params = makeParams();
+    params.receiver.window_mode = true;
+    params.receiver.window_azimuth = 270;
+    params.receiver.window_fov = 120;
+    params.receiver.glass_type = "triple";
+    params.receiver.structural_material = "metal";
+    const payload = buildSimulationPayload(params);
+    expect(payload.window_mode).toBe(true);
+    expect(payload.window_azimuth).toBe(270);
+    expect(payload.window_fov).toBe(120);
+    expect(payload.glass_type).toBe("triple");
+    expect(payload.structural_material).toBe("metal");
   });
 });

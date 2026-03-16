@@ -82,6 +82,11 @@ export function buildSimulationPayload(params: SplatParams): Record<string, unkn
     colormap: params.display.color_scale,
     min_dbm: params.display.min_dbm,
     max_dbm: params.display.max_dbm,
+    window_mode: params.receiver.window_mode,
+    window_azimuth: params.receiver.window_azimuth,
+    window_fov: params.receiver.window_fov,
+    glass_type: params.receiver.glass_type,
+    structural_material: params.receiver.structural_material,
   };
 }
 

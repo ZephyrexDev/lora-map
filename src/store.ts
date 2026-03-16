@@ -17,6 +17,7 @@ import { cloneObject, pathLossColor, TOWER_COLORS, buildSimulationPayload } from
 import { redPinMarker } from "./layers.ts";
 import { createOverlapHatchLayer } from "./layers/OverlapHatchLayer.ts";
 import { DeadzoneCanvasLayer } from "./deadzoneLayer.ts";
+import { createFovCone, type FovConeHandle } from "./layers/WindowFovCone.ts";
 
 /** Delay (ms) before reloading tower paths after a simulation completes. */
 const PATH_RELOAD_DELAY_MS = 5000;
@@ -52,6 +53,7 @@ const useStore = defineStore("store", {
       towersError: "" as string,
       _pathReloadTimer: 0 as number,
       _pollTimer: 0 as number,
+      _fovCone: null as FovConeHandle | null,
       matrixConfig: null as MatrixConfig | null,
       splatParams: <SplatParams>{
         transmitter: {
@@ -68,6 +70,11 @@ const useStore = defineStore("store", {
           rx_height: 1.0,
           rx_gain: 2.0,
           rx_loss: 2.0,
+          window_mode: false,
+          window_azimuth: 0,
+          window_fov: 90,
+          glass_type: "double" as const,
+          structural_material: "brick" as const,
         },
         environment: {
           radio_climate: "continental_temperate",
@@ -434,6 +441,26 @@ const useStore = defineStore("store", {
       this.splatParams.transmitter.tx_lat = lat;
       this.splatParams.transmitter.tx_lon = lon;
     },
+    updateFovCone() {
+      if (!this.map) return;
+      const { receiver, transmitter } = this.splatParams;
+      if (!receiver.window_mode) {
+        if (this._fovCone) {
+          this._fovCone.remove();
+          this._fovCone = null;
+        }
+        return;
+      }
+      const center: L.LatLngExpression = [transmitter.tx_lat, transmitter.tx_lon];
+      if (this._fovCone) {
+        this._fovCone.update(center, receiver.window_azimuth, receiver.window_fov);
+      } else {
+        this._fovCone = createFovCone(this.map, center, receiver.window_azimuth, receiver.window_fov, (azimuth) => {
+          this.splatParams.receiver.window_azimuth = azimuth;
+          this.updateFovCone();
+        });
+      }
+    },
     prefillTransmitter(lat: number, lon: number) {
       this.splatParams.transmitter.tx_lat = lat;
       this.splatParams.transmitter.tx_lon = lon;
@@ -443,6 +470,7 @@ const useStore = defineStore("store", {
       }
       this.currentMarker = L.marker([lat, lon], { icon: redPinMarker }).addTo(this.map);
       this.map.setView([lat, lon], this.map.getZoom());
+      this.updateFovCone();
     },
     async removeSite(index: number) {
       if (!this.map) return;
@@ -699,6 +727,10 @@ const useStore = defineStore("store", {
                 visible: true,
               });
               this.currentMarker?.removeFrom(this.map as L.Map);
+              if (this._fovCone) {
+                this._fovCone.remove();
+                this._fovCone = null;
+              }
               this.splatParams.transmitter.name = randanimalSync();
               this.updateOverlapLayer();
               // Reload tower paths after backend has time to compute
