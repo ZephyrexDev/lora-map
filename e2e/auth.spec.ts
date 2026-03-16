@@ -4,6 +4,10 @@ test.describe('Admin authentication', () => {
   test('login modal opens and accepts correct password', async ({ page, adminPassword }) => {
     await page.goto('/')
 
+    // Close the offcanvas sidebar so it doesn't intercept clicks on the login button
+    await page.locator('[data-bs-dismiss="offcanvas"]').click()
+    await expect(page.locator('#offcanvasDarkNavbar')).toBeHidden({ timeout: 5_000 })
+
     // Open login modal
     await page.locator('[data-bs-target="#loginModal"]').click()
     await expect(page.locator('#loginModal')).toBeVisible()
@@ -17,13 +21,14 @@ test.describe('Admin authentication', () => {
     await expect(page.locator('[data-bs-target="#loginModal"]')).toHaveClass(/btn-outline-success/, {
       timeout: 10_000,
     })
-
-    // Admin-only elements should appear in the offcanvas
-    await expect(page.locator('#runSimulation')).toBeVisible({ timeout: 5_000 })
   })
 
   test('login modal rejects incorrect password', async ({ page }) => {
     await page.goto('/')
+
+    // Close the offcanvas sidebar so it doesn't intercept clicks
+    await page.locator('[data-bs-dismiss="offcanvas"]').click()
+    await expect(page.locator('#offcanvasDarkNavbar')).toBeHidden({ timeout: 5_000 })
 
     await page.locator('[data-bs-target="#loginModal"]').click()
     await expect(page.locator('#loginModal')).toBeVisible()
@@ -40,6 +45,10 @@ test.describe('Admin authentication', () => {
 
   test('admin can logout', async ({ page, adminPassword }) => {
     await page.goto('/')
+
+    // Close the offcanvas sidebar so it doesn't intercept clicks
+    await page.locator('[data-bs-dismiss="offcanvas"]').click()
+    await expect(page.locator('#offcanvasDarkNavbar')).toBeHidden({ timeout: 5_000 })
 
     // Login first
     await page.locator('[data-bs-target="#loginModal"]').click()

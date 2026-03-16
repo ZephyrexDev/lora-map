@@ -105,6 +105,10 @@ test.describe('API integration', () => {
   test('admin login enables map and simulation UI', async ({ page, adminPassword }) => {
     await page.goto('/')
 
+    // Close the offcanvas sidebar so it doesn't intercept clicks on login button
+    await page.locator('[data-bs-dismiss="offcanvas"]').click()
+    await expect(page.locator('#offcanvasDarkNavbar')).toBeHidden({ timeout: 5_000 })
+
     // Open login modal via navbar button
     await page.locator('[data-bs-target="#loginModal"]').click()
     await expect(page.locator('#loginModal')).toBeVisible()
@@ -119,7 +123,8 @@ test.describe('API integration', () => {
     // After login, Transmitter component mounts and initializes the map
     await expect(page.locator('.leaflet-container')).toBeVisible({ timeout: 10_000 })
 
-    // Admin controls should be present in the offcanvas (which has class "show" by default)
+    // Re-open the offcanvas to verify admin controls
+    await page.locator('[data-bs-target="#offcanvasDarkNavbar"]').click()
     await expect(page.locator('#runSimulation')).toBeVisible({ timeout: 5_000 })
   })
 })
