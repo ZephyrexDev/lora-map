@@ -13,14 +13,19 @@ import { test as base, expect, type APIRequestContext } from '@playwright/test'
 const BACKEND_URL = 'http://localhost:8080'
 const ADMIN_PASSWORD = 'e2e-test-password'
 
+/** Cached admin token — login only once per Playwright run to avoid rate limiting. */
+let cachedToken: string | null = null
+
 /** Helper to authenticate against the backend and return a Bearer token. */
 async function getAdminToken(request: APIRequestContext): Promise<string> {
+  if (cachedToken !== null) return cachedToken
   const response = await request.post(`${BACKEND_URL}/auth/login`, {
     data: { password: ADMIN_PASSWORD },
   })
   expect(response.ok()).toBe(true)
   const body = await response.json()
-  return body.token as string
+  cachedToken = body.token as string
+  return cachedToken
 }
 
 /** Extended test fixture that exposes admin helpers. */
