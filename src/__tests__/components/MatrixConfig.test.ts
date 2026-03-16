@@ -122,6 +122,14 @@ describe("MatrixConfig.vue", () => {
     expect(wrapper.find(".badge.bg-success").text()).toBe("Saved");
   });
 
+  it("excludes derived terrain models (weighted_aggregate, worst_case)", async () => {
+    const wrapper = await mountMatrixConfig();
+    expect(wrapper.find("#ter-weighted_aggregate").exists()).toBe(false);
+    expect(wrapper.find("#ter-worst_case").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Weighted Aggregate");
+    expect(wrapper.text()).not.toContain("Worst Case");
+  });
+
   it("renders correct labels from shared label maps", async () => {
     const wrapper = await mountMatrixConfig();
     expect(wrapper.text()).toContain("Heltec V3");

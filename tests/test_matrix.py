@@ -3,11 +3,17 @@
 from app.db import db_session
 from app.matrix import (
     DEFAULT_MATRIX_CONFIG,
+    KNOWN_TERRAIN,
     get_matrix_combinations,
     get_matrix_config,
     set_matrix_config,
 )
 from app.models.MatrixConfigRequest import MatrixConfigRequest
+
+
+class TestKnownTerrain:
+    def test_known_terrain_includes_worst_case(self):
+        assert "worst_case" in KNOWN_TERRAIN
 
 
 class TestDefaultMatrixConfig:

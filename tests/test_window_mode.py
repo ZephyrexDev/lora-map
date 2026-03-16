@@ -1,6 +1,5 @@
 """Tests for window mode — directional attenuation through glass/structure."""
 
-
 import numpy as np
 import pytest
 from pydantic import ValidationError

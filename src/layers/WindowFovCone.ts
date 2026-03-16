@@ -11,7 +11,7 @@ const CONE_COLOR = "#3388ff";
  * Build a lat/lon polygon representing a sector (pie wedge) centered
  * on `center`, spanning `fovDeg` degrees around `azimuthDeg` (CW from north).
  */
-function sectorPoints(
+export function sectorPoints(
   center: L.LatLng,
   radiusM: number,
   azimuthDeg: number,
@@ -34,7 +34,7 @@ function sectorPoints(
  * Calculate a destination point given a start, distance (m), and bearing (degrees CW from north).
  * Uses spherical earth approximation.
  */
-function destinationPoint(start: L.LatLng, distanceM: number, bearingDeg: number): L.LatLng {
+export function destinationPoint(start: L.LatLng, distanceM: number, bearingDeg: number): L.LatLng {
   const R = 6371000; // Earth radius in meters
   const d = distanceM / R;
   const brng = (bearingDeg * Math.PI) / 180;
