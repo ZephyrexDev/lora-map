@@ -38,6 +38,21 @@ class CoveragePredictionRequest(BaseModel):
     signal_threshold: float = Field(-100, le=0, description="Signal cutoff in dBm (<= 0)")
     clutter_height: float = Field(0, ge=0, description="Ground clutter height in meters (>= 0)")
 
+    # Window mode — directional attenuation through glass/structure
+    window_mode: bool = Field(False, description="Enable window mode: directional attenuation through glass/structure")
+    window_azimuth: float = Field(
+        0.0, ge=0, lt=360, description="Azimuth the window faces in degrees clockwise from north (0-359)"
+    )
+    window_fov: float = Field(90.0, gt=0, le=360, description="Window field of view in degrees (1-360)")
+    glass_type: Literal["single", "double", "triple"] = Field(
+        "double",
+        description="Glass pane type: single (~2 dB loss), double (~4 dB), triple (~6 dB)",
+    )
+    structural_material: Literal["drywall", "brick", "metal"] = Field(
+        "brick",
+        description="Wall material outside FOV: drywall (~3 dB), brick (~10 dB), metal (~20 dB)",
+    )
+
     # Environmental
     ground_dielectric: float | None = Field(15.0, ge=1, description="Ground dielectric constant (default: 15.0)")
     ground_conductivity: float | None = Field(0.005, ge=0, description="Ground conductivity in S/m (default: 0.005)")
@@ -100,10 +115,11 @@ class CoveragePredictionRequest(BaseModel):
         "instead of the default 3-arcsecond / 90 meter (default: False).",
     )
 
-    terrain_model: Literal["bare_earth", "dsm", "lulc_clutter", "weighted_aggregate"] = Field(
+    terrain_model: Literal["bare_earth", "dsm", "lulc_clutter", "weighted_aggregate", "worst_case"] = Field(
         "bare_earth",
         description="Terrain model: bare_earth (SRTM DTM), dsm (Digital Surface Model), "
-        "lulc_clutter (SRTM + land cover clutter heights), or weighted_aggregate (blend of all three)",
+        "lulc_clutter (SRTM + land cover clutter heights), weighted_aggregate (blend of all three), "
+        "or worst_case (max obstacle height from all models, tower at bare-earth ground level)",
     )
 
     # Tower display

@@ -206,6 +206,16 @@ A fourth virtual terrain model that blends the three real models into a single c
 - [x] Rationale: bare-earth is optimistic (no obstructions), DSM and LULC each capture different real-world blockage — weighting them equally at 40% each gives a practical "expected real-world" estimate while the 20% bare-earth component prevents over-pessimism in areas where DSM/LULC data is noisy
 - [x] Add `"weighted_aggregate"` as a terrain model option in the visitor UI selector (only available when all three base models are cached)
 
+### Worst Case mode
+A fifth virtual terrain model that gives the most pessimistic coverage prediction. Uses `max(bare_earth, dsm, lulc_clutter)` per pixel so obstacles are as tall as any model predicts, but adjusts tower height so the antenna remains at bare-earth ground level — maximizing obstacle blockage relative to the antenna.
+
+- [x] Add `WorstCaseProvider` in `app/services/terrain.py` that produces tiles with per-pixel max of all three base models
+- [x] Add `elevation_at_point` helper on `TerrainProvider` base class for reading elevation at a specific lat/lon
+- [x] Adjust TX height in `coverage_prediction()`: subtract terrain delta (worst_case − bare_earth) at tower location, floor at 1.0m AGL
+- [x] Add `"worst_case"` to `CoveragePredictionRequest` Literal, `KNOWN_TERRAIN`, `TERRAIN_LABELS`
+- [x] Filter `worst_case` from matrix combinations and admin checkboxes (derived from all three base models)
+- [x] Available in visitor terrain selector when all three base terrain simulations are cached
+
 ### Terrain model selection
 - [x] Add `terrain_model` field to `CoveragePredictionRequest`: `"bare_earth"` (default), `"dsm"`, `"lulc_clutter"`
 - [x] Route tile download/preprocessing through the selected model in `coverage_prediction()`
@@ -335,6 +345,27 @@ A fourth virtual terrain model that blends the three real models into a single c
 
 ### Type safety
 - [x] Fix `setTxCoords` — wrap `.toFixed(6)` in `parseFloat()` so numbers reach the store
+
+## 19. Window Mode — directional attenuation
+
+Simulate a receiver behind a window: signals within a configurable FOV cone pass through glass (single/double/triple pane), while signals from all other directions pass through structural material (drywall/brick/metal). Applied as post-processing on the dBm raster after SPLAT! runs.
+
+### Backend
+- [x] Add `window_mode`, `window_azimuth`, `window_fov`, `glass_type`, `structural_material` fields to `CoveragePredictionRequest`
+- [x] Define glass attenuation constants: single=2 dB, double=4 dB, triple=6 dB
+- [x] Define structural attenuation constants: drywall=3 dB, brick=10 dB, metal=20 dB
+- [x] Add `_apply_window_attenuation()` — per-pixel azimuth calculation and directional loss
+- [x] Integrate into `coverage_prediction()` after GeoTIFF generation
+
+### Frontend
+- [x] Add window mode fields to `SplatParams.receiver` interface
+- [x] Add Window Mode toggle, azimuth, FOV, glass type, and wall material controls to `Receiver.vue`
+- [x] Pass window fields through `buildSimulationPayload`
+
+### Tests
+- [x] Backend model validation (field bounds, defaults, enum values)
+- [x] Attenuation math (azimuth calculation, FOV boundary, NaN handling)
+- [x] Frontend payload builder includes window fields
 
 ---
 

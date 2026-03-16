@@ -23,7 +23,7 @@ from rasterio.transform import Affine, from_bounds
 
 from app.models.CoveragePredictionRequest import CoveragePredictionRequest
 from app.models.PointToPointResult import PointToPointResult
-from app.services.terrain import DsmProvider, LulcClutterProvider, SrtmProvider, TerrainProvider
+from app.services.terrain import DsmProvider, LulcClutterProvider, SrtmProvider, TerrainProvider, WorstCaseProvider
 
 logger = logging.getLogger(__name__)
 logging.getLogger("boto3").setLevel(logging.WARNING)
@@ -82,15 +82,23 @@ class Splat:
 
         # Terrain providers
         srtm_provider = SrtmProvider(self.s3, self.tile_cache)
+        dsm_provider = DsmProvider(self.s3, self.tile_cache, srtm_fallback=srtm_provider)
+        lulc_provider = LulcClutterProvider(self.s3, self.tile_cache, srtm_provider=srtm_provider)
+        self._srtm_provider = srtm_provider
         self.terrain_providers: dict[str, TerrainProvider] = {
             "bare_earth": srtm_provider,
-            "dsm": DsmProvider(self.s3, self.tile_cache, srtm_fallback=srtm_provider),
-            "lulc_clutter": LulcClutterProvider(self.s3, self.tile_cache, srtm_provider=srtm_provider),
+            "dsm": dsm_provider,
+            "lulc_clutter": lulc_provider,
+            "worst_case": WorstCaseProvider(
+                self.s3, self.tile_cache, srtm=srtm_provider, dsm=dsm_provider, lulc=lulc_provider
+            ),
         }
 
         logger.info(
             "Initialized SPLAT! with terrain tile cache at '%s' with a size limit of %s GB.", cache_dir, cache_size_gb
         )
+
+    _MIN_AGL_HEIGHT = 1.0  # SPLAT! minimum above-ground-level height in meters
 
     @staticmethod
     def mismatch_loss_db(swr: float) -> float:
@@ -99,6 +107,142 @@ class Splat:
             return 0.0
         reflection = ((swr - 1) / (swr + 1)) ** 2
         return -10 * math.log10(1 - reflection)
+
+    def _worst_case_adjusted_height(
+        self, lat: float, lon: float, original_height: float, wc_provider: TerrainProvider
+    ) -> float:
+        """Adjust AGL height so the antenna stays at bare-earth ground level.
+
+        In worst-case terrain, the tile elevation at the tower may be inflated by
+        DSM/LULC surface features.  This subtracts the delta so the antenna ASL
+        position matches what it would be on bare earth.
+        """
+        tile_name = Splat._tile_name_for_point(lat, lon)
+        tile_lat, tile_lon = TerrainProvider._parse_tile_name(tile_name)
+
+        bare_elev = TerrainProvider.elevation_at_point(
+            self._srtm_provider.get_tile(tile_name), lat, lon, tile_lat, tile_lon
+        )
+        wc_elev = TerrainProvider.elevation_at_point(wc_provider.get_tile(tile_name), lat, lon, tile_lat, tile_lon)
+
+        delta = wc_elev - bare_elev
+        adjusted = max(self._MIN_AGL_HEIGHT, original_height - delta)
+        if delta > 0:
+            logger.info(
+                "Worst-case height adjustment at (%.4f, %.4f): terrain delta=%.1f m, " "tx_height %.1f -> %.1f m AGL",
+                lat,
+                lon,
+                delta,
+                original_height,
+                adjusted,
+            )
+        return adjusted
+
+    # Window mode attenuation constants (dB loss through material at ~900 MHz)
+    GLASS_ATTENUATION_DB: dict[str, float] = {
+        "single": 2.0,
+        "double": 4.0,
+        "triple": 6.0,
+    }
+    STRUCTURAL_ATTENUATION_DB: dict[str, float] = {
+        "drywall": 3.0,
+        "brick": 10.0,
+        "metal": 20.0,
+    }
+
+    @staticmethod
+    def _apply_window_attenuation(
+        dbm_array: np.ndarray,
+        tx_lat: float,
+        tx_lon: float,
+        north: float,
+        south: float,
+        east: float,
+        west: float,
+        window_azimuth: float,
+        window_fov: float,
+        glass_attenuation: float,
+        structural_attenuation: float,
+    ) -> np.ndarray:
+        """Apply directional window attenuation to a dBm raster.
+
+        Pixels within the window FOV cone receive glass attenuation; pixels
+        outside receive structural (wall) attenuation. The result is a copy —
+        the input array is not mutated.
+
+        Args:
+            dbm_array: 2-D float32 array of dBm values (NaN = no coverage).
+            tx_lat, tx_lon: Transmitter location.
+            north, south, east, west: Raster geographic bounds.
+            window_azimuth: Direction the window faces (degrees CW from north, 0-359).
+            window_fov: Total angular width of the window opening (degrees).
+            glass_attenuation: Loss in dB for signals arriving through the window.
+            structural_attenuation: Loss in dB for signals arriving through walls.
+
+        Returns:
+            A new dBm array with attenuation applied.
+        """
+        height, width = dbm_array.shape
+        result = dbm_array.copy()
+
+        # Build arrays of lat/lon for each pixel center
+        lats = np.linspace(north, south, height)
+        lons = np.linspace(west, east, width)
+        lon_grid, lat_grid = np.meshgrid(lons, lats)
+
+        # Compute azimuth from transmitter to each pixel (degrees CW from north)
+        dlat = lat_grid - tx_lat
+        dlon = lon_grid - tx_lon
+        # atan2(dlon, dlat) gives angle from north, CW positive
+        azimuth = np.degrees(np.arctan2(dlon, dlat)) % 360
+
+        # Compute angular difference between pixel azimuth and window azimuth
+        diff = (azimuth - window_azimuth + 180) % 360 - 180  # range [-180, 180]
+        half_fov = window_fov / 2.0
+        in_fov = np.abs(diff) <= half_fov
+
+        # Apply attenuation only to non-NaN pixels
+        valid = ~np.isnan(result)
+        result[valid & in_fov] -= glass_attenuation
+        result[valid & ~in_fov] -= structural_attenuation
+
+        return result
+
+    @staticmethod
+    def _apply_window_attenuation_to_geotiff(
+        geotiff_bytes: bytes,
+        tx_lat: float,
+        tx_lon: float,
+        window_azimuth: float,
+        window_fov: float,
+        glass_attenuation: float,
+        structural_attenuation: float,
+    ) -> bytes:
+        """Read a dBm GeoTIFF, apply window attenuation, and return new GeoTIFF bytes."""
+        with io.BytesIO(geotiff_bytes) as src_buf, rasterio.open(src_buf) as src:
+            dbm_array = src.read(1)
+            bounds = src.bounds
+            profile = src.profile.copy()
+
+        attenuated = Splat._apply_window_attenuation(
+            dbm_array,
+            tx_lat=tx_lat,
+            tx_lon=tx_lon,
+            north=bounds.top,
+            south=bounds.bottom,
+            east=bounds.right,
+            west=bounds.left,
+            window_azimuth=window_azimuth,
+            window_fov=window_fov,
+            glass_attenuation=glass_attenuation,
+            structural_attenuation=structural_attenuation,
+        )
+
+        with io.BytesIO() as dst_buf:
+            with rasterio.open(dst_buf, "w", **profile) as dst:
+                dst.write(attenuated, 1)
+            dst_buf.seek(0)
+            return dst_buf.read()
 
     def coverage_prediction(self, request: CoveragePredictionRequest) -> bytes:
         """
@@ -144,9 +288,16 @@ class Splat:
                     ) as sdf_file:
                         sdf_file.write(sdf_data)
 
+                # Worst-case terrain: adjust TX height so the antenna remains at
+                # bare-earth ground level instead of being elevated by DSM/LULC
+                # surface features (buildings, trees) at the tower location.
+                tx_height = request.tx_height
+                if request.terrain_model == "worst_case":
+                    tx_height = self._worst_case_adjusted_height(request.lat, request.lon, request.tx_height, provider)
+
                 # write transmitter / qth file
                 with open(Path(tmpdir) / "tx.qth", "wb") as qth_file:
-                    qth_file.write(Splat._create_splat_qth("tx", request.lat, request.lon, request.tx_height))
+                    qth_file.write(Splat._create_splat_qth("tx", request.lat, request.lon, tx_height))
 
                 # Apply SWR mismatch loss to effective TX power
                 effective_tx_power = request.tx_power - Splat.mismatch_loss_db(request.swr)
@@ -242,12 +393,35 @@ class Splat:
                         request.max_dbm,
                     )
 
+                # Apply directional window attenuation if enabled
+                if request.window_mode:
+                    glass_db = Splat.GLASS_ATTENUATION_DB[request.glass_type]
+                    structural_db = Splat.STRUCTURAL_ATTENUATION_DB[request.structural_material]
+                    geotiff_data = Splat._apply_window_attenuation_to_geotiff(
+                        geotiff_data,
+                        tx_lat=request.lat,
+                        tx_lon=request.lon,
+                        window_azimuth=request.window_azimuth,
+                        window_fov=request.window_fov,
+                        glass_attenuation=glass_db,
+                        structural_attenuation=structural_db,
+                    )
+
                 logger.info("SPLAT! coverage prediction completed successfully.")
                 return geotiff_data
 
             except Exception as e:
                 logger.error("Error during coverage prediction: %s", e)
                 raise RuntimeError(f"Error during coverage prediction: {e}") from e
+
+    @staticmethod
+    def _tile_name_for_point(lat: float, lon: float) -> str:
+        """Return the .hgt.gz tile name containing a given lat/lon point."""
+        tile_lat = int(lat) if lat >= 0 else int(lat) - 1
+        tile_lon = int(lon) if lon >= 0 else int(lon) - 1
+        ns = "N" if tile_lat >= 0 else "S"
+        ew = "E" if tile_lon >= 0 else "W"
+        return f"{ns}{abs(tile_lat):02d}{ew}{abs(tile_lon):03d}.hgt.gz"
 
     @staticmethod
     def _calculate_required_terrain_tiles(lat: float, lon: float, radius: float) -> list[tuple[str, str, str]]:

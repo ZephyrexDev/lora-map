@@ -17,6 +17,7 @@ export const TERRAIN_LABELS: Readonly<Record<string, string>> = {
   dsm: "Digital Surface Model",
   lulc_clutter: "LULC Clutter",
   weighted_aggregate: "Weighted Aggregate",
+  worst_case: "Worst Case",
 } as const;
 
 export interface LabelOption {

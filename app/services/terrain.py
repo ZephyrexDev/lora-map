@@ -8,6 +8,7 @@ Supported terrain models:
     - **bare_earth** (SRTM DTM): Standard SRTM elevation from ``elevation-tiles-prod``.
     - **dsm** (Digital Surface Model): Copernicus GLO-30 DSM from ``copernicus-dem-30m``.
     - **lulc_clutter**: SRTM + ESA WorldCover land-cover clutter heights.
+    - **worst_case**: max(bare_earth, dsm, lulc_clutter) per pixel for maximum obstacles.
 """
 
 from __future__ import annotations
@@ -80,6 +81,49 @@ class TerrainProvider(ABC):
         lat = int(base[1:3]) * (1 if base[0] == "N" else -1)
         lon = int(base[4:7]) * (1 if base[3] == "E" else -1)
         return lat, lon
+
+    @staticmethod
+    def _decompress_hgt(hgt_gz: bytes) -> np.ndarray:
+        """Decompress .hgt.gz bytes into a 2D int16 array."""
+        with gzip.GzipFile(fileobj=io.BytesIO(hgt_gz)) as gz:
+            raw = gz.read()
+        n_values = len(raw) // 2
+        side = int(n_values**0.5)
+        if side * side != n_values:
+            raise ValueError(f"Invalid HGT tile size: {n_values} values is not a perfect square")
+        return np.frombuffer(raw, dtype=">i2").reshape(side, side)
+
+    @staticmethod
+    def _compress_hgt(arr: np.ndarray) -> bytes:
+        """Compress a 2D int16 array into .hgt.gz bytes."""
+        raw = np.clip(arr, -32768, 32767).astype(np.int16).astype(">i2").tobytes()
+        buf = io.BytesIO()
+        with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+            gz.write(raw)
+        return buf.getvalue()
+
+    @staticmethod
+    def elevation_at_point(hgt_gz: bytes, lat: float, lon: float, tile_lat: int, tile_lon: int) -> float:
+        """Read elevation at a specific lat/lon from .hgt.gz tile bytes.
+
+        Args:
+            hgt_gz: Compressed .hgt.gz tile data.
+            lat: Query latitude in degrees.
+            lon: Query longitude in degrees.
+            tile_lat: South-west corner latitude of the tile (integer).
+            tile_lon: South-west corner longitude of the tile (integer).
+
+        Returns:
+            Elevation in meters at the queried point.
+        """
+        arr = TerrainProvider._decompress_hgt(hgt_gz)
+        side = arr.shape[0]
+        samples = side - 1  # 3600 for a 3601x3601 tile
+        row = int((tile_lat + 1 - lat) * samples)
+        col = int((lon - tile_lon) * samples)
+        row = max(0, min(row, samples))
+        col = max(0, min(col, samples))
+        return float(arr[row, col])
 
 
 class SrtmProvider(TerrainProvider):
@@ -202,34 +246,15 @@ class LulcClutterProvider(TerrainProvider):
             logger.info("Cache hit: %s", cache_key)
             return self.tile_cache[cache_key]
 
-        # Load bare-earth SRTM tile
         srtm_hgt_gz = self._srtm.get_tile(tile_name)
+        elevation = self._decompress_hgt(srtm_hgt_gz).astype(np.float32)
+        side = elevation.shape[0]
 
-        # Decompress SRTM to int16 array
-        with gzip.GzipFile(fileobj=io.BytesIO(srtm_hgt_gz)) as gz:
-            raw = gz.read()
-
-        n_values = len(raw) // 2
-        side = int(n_values**0.5)
-        if side * side != n_values:
-            raise ValueError(
-                f"Invalid HGT tile size: {n_values} values is not a perfect square ({side}² = {side * side})"
-            )
-        elevation = np.frombuffer(raw, dtype=">i2").reshape(side, side).astype(np.float32)
-
-        # Fetch WorldCover tile and compute clutter heights
         lat, lon = self._parse_tile_name(tile_name)
         clutter = self._get_clutter_grid(lat, lon, side)
 
-        # Add clutter heights to elevation
-        combined = np.clip(elevation + clutter, -32768, 32767).astype(np.int16)
-        combined_raw = combined.astype(">i2").tobytes()
-
-        buf = io.BytesIO()
-        with gzip.GzipFile(fileobj=buf, mode="wb") as gz_out:
-            gz_out.write(combined_raw)
-
-        hgt_gz = buf.getvalue()
+        combined = elevation + clutter
+        hgt_gz = self._compress_hgt(combined)
         self.tile_cache[cache_key] = hgt_gz
         return hgt_gz
 
@@ -276,3 +301,42 @@ class LulcClutterProvider(TerrainProvider):
         ns = "N" if lat >= 0 else "S"
         ew = "E" if lon >= 0 else "W"
         return f"v200/2021/map/ESA_WorldCover_10m_2021_v200_{ns}{abs(lat):02d}{ew}{abs(lon):03d}_Map.tif"
+
+
+class WorstCaseProvider(TerrainProvider):
+    """Per-pixel max of bare_earth, DSM, and LULC clutter for worst-case obstacle heights.
+
+    Produces terrain tiles where every pixel is ``max(srtm, dsm, lulc_clutter)``,
+    giving the most pessimistic propagation model — obstacles are as tall as the
+    highest source model predicts.  Tower/client height adjustment is handled
+    separately in the SPLAT! service to keep antennas at bare-earth ground level.
+    """
+
+    def __init__(
+        self,
+        s3: boto3.client,
+        tile_cache: Cache,
+        srtm: SrtmProvider,
+        dsm: DsmProvider,
+        lulc: LulcClutterProvider,
+    ) -> None:
+        super().__init__(s3, tile_cache)
+        self._srtm = srtm
+        self._dsm = dsm
+        self._lulc = lulc
+
+    def get_tile(self, tile_name: str) -> bytes:
+        cache_key = f"worst_case:{tile_name}"
+        if cache_key in self.tile_cache:
+            logger.info("Cache hit: %s", cache_key)
+            return self.tile_cache[cache_key]
+
+        srtm_arr = self._decompress_hgt(self._srtm.get_tile(tile_name)).astype(np.float32)
+        dsm_arr = self._decompress_hgt(self._dsm.get_tile(tile_name)).astype(np.float32)
+        lulc_arr = self._decompress_hgt(self._lulc.get_tile(tile_name)).astype(np.float32)
+
+        max_arr = np.maximum(np.maximum(srtm_arr, dsm_arr), lulc_arr)
+
+        hgt_gz = self._compress_hgt(max_arr)
+        self.tile_cache[cache_key] = hgt_gz
+        return hgt_gz

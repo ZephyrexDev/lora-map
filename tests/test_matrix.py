@@ -115,3 +115,23 @@ class TestGetMatrixCombinations:
         combos = get_matrix_combinations(config)
         assert len(combos) == 1
         assert combos[0]["terrain"] == "bare_earth"
+
+    def test_worst_case_excluded(self):
+        config = MatrixConfigRequest(
+            hardware=["v3"],
+            antennas=["duck_stubby"],
+            terrain=["bare_earth", "worst_case"],
+        )
+        combos = get_matrix_combinations(config)
+        assert len(combos) == 1
+        assert combos[0]["terrain"] == "bare_earth"
+
+    def test_both_derived_terrain_excluded(self):
+        config = MatrixConfigRequest(
+            hardware=["v3"],
+            antennas=["duck_stubby"],
+            terrain=["bare_earth", "weighted_aggregate", "worst_case"],
+        )
+        combos = get_matrix_combinations(config)
+        assert len(combos) == 1
+        assert combos[0]["terrain"] == "bare_earth"

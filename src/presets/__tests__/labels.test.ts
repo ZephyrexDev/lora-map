@@ -17,10 +17,11 @@ describe("ANTENNA_LABELS", () => {
 });
 
 describe("TERRAIN_LABELS", () => {
-  it("includes all four terrain models", () => {
-    expect(Object.keys(TERRAIN_LABELS)).toHaveLength(4);
+  it("includes all five terrain models", () => {
+    expect(Object.keys(TERRAIN_LABELS)).toHaveLength(5);
     expect(TERRAIN_LABELS.bare_earth).toContain("SRTM");
     expect(TERRAIN_LABELS.weighted_aggregate).toContain("Aggregate");
+    expect(TERRAIN_LABELS.worst_case).toContain("Worst");
   });
 });
 

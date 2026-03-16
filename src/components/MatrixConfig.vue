@@ -63,9 +63,10 @@ const showSaved = ref(false);
 
 const hardwareOptions = labelsToOptions(HARDWARE_LABELS);
 const antennaOptions = labelsToOptions(ANTENNA_LABELS);
-// Exclude weighted_aggregate — it's derived, not a real terrain simulation
+// Exclude derived terrain models — they are computed from the three base models
+const DERIVED_TERRAIN = new Set(["weighted_aggregate", "worst_case"]);
 const terrainOptions = labelsToOptions(
-  Object.fromEntries(Object.entries(TERRAIN_LABELS).filter(([k]) => k !== "weighted_aggregate")),
+  Object.fromEntries(Object.entries(TERRAIN_LABELS).filter(([k]) => !DERIVED_TERRAIN.has(k))),
 );
 
 const config = reactive<MatrixConfig>({

@@ -30,7 +30,7 @@ ANTENNA_RX_PARAMS: dict[str, dict[str, float]] = {
 # Known valid values for matrix axes — derived from preset data.
 KNOWN_HARDWARE: frozenset[str] = frozenset(HARDWARE_RX_PARAMS.keys()) | {"custom"}
 KNOWN_ANTENNAS: frozenset[str] = frozenset(ANTENNA_RX_PARAMS.keys())
-KNOWN_TERRAIN: frozenset[str] = frozenset({"bare_earth", "dsm", "lulc_clutter", "weighted_aggregate"})
+KNOWN_TERRAIN: frozenset[str] = frozenset({"bare_earth", "dsm", "lulc_clutter", "weighted_aggregate", "worst_case"})
 
 DEFAULT_MATRIX_CONFIG = MatrixConfigRequest(
     hardware=["v3", "v4"],
@@ -72,8 +72,8 @@ def get_matrix_combinations(config: MatrixConfigRequest) -> list[dict[str, str]]
     """
     hardware = config.hardware
     antennas = config.antennas
-    # weighted_aggregate is derived from the three base models, not a real simulation
-    terrain = [t for t in config.terrain if t != "weighted_aggregate"]
+    # weighted_aggregate and worst_case are derived from the three base models
+    terrain = [t for t in config.terrain if t not in {"weighted_aggregate", "worst_case"}]
 
     if not hardware or not antennas or not terrain:
         return []
