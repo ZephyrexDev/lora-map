@@ -16,11 +16,19 @@ test.describe('Visitor flow', () => {
     await expect(page.locator('.offcanvas-body')).toContainText('Log in as admin')
   })
 
-  test('towers endpoint returns empty list on clean DB', async ({ page, adminToken }) => {
-    // adminToken fixture clears all towers
+  test('shows no towers message when all towers are deleted', async ({ page, request, backendUrl, adminToken }) => {
+    const headers = { Authorization: `Bearer ${adminToken}` }
+
+    // Delete all existing towers
+    const towersResp = await request.get(`${backendUrl}/towers`)
+    const { towers } = await towersResp.json()
+    for (const tower of towers) {
+      await request.delete(`${backendUrl}/towers/${tower.id}`, { headers })
+    }
+
     await page.goto('/')
-    // "No towers" message should be visible
-    await expect(page.getByText('No towers')).toBeVisible()
+    // "No towers" message should be visible in the offcanvas sidebar
+    await expect(page.getByText('No towers')).toBeVisible({ timeout: 10_000 })
   })
 
   test('GET /towers API returns valid JSON', async ({ request, backendUrl, adminToken }) => {

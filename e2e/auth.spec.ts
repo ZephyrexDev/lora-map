@@ -4,10 +4,6 @@ test.describe('Admin authentication', () => {
   test('login modal opens and accepts correct password', async ({ page, adminPassword }) => {
     await page.goto('/')
 
-    // Close the offcanvas sidebar first so it doesn't intercept clicks
-    await page.locator('[data-bs-dismiss="offcanvas"]').click()
-    await page.waitForTimeout(500)
-
     // Open login modal
     await page.locator('[data-bs-target="#loginModal"]').click()
     await expect(page.locator('#loginModal')).toBeVisible()
@@ -22,16 +18,12 @@ test.describe('Admin authentication', () => {
       timeout: 10_000,
     })
 
-    // Admin-only elements should appear: "Run Simulation" button
-    await expect(page.locator('#runSimulation')).toBeVisible()
+    // Admin-only elements should appear in the offcanvas
+    await expect(page.locator('#runSimulation')).toBeVisible({ timeout: 5_000 })
   })
 
   test('login modal rejects incorrect password', async ({ page }) => {
     await page.goto('/')
-
-    // Close offcanvas
-    await page.locator('[data-bs-dismiss="offcanvas"]').click()
-    await page.waitForTimeout(500)
 
     await page.locator('[data-bs-target="#loginModal"]').click()
     await expect(page.locator('#loginModal')).toBeVisible()
@@ -49,10 +41,6 @@ test.describe('Admin authentication', () => {
   test('admin can logout', async ({ page, adminPassword }) => {
     await page.goto('/')
 
-    // Close offcanvas
-    await page.locator('[data-bs-dismiss="offcanvas"]').click()
-    await page.waitForTimeout(500)
-
     // Login first
     await page.locator('[data-bs-target="#loginModal"]').click()
     await page.locator('#passwordInput').fill(adminPassword)
@@ -61,8 +49,9 @@ test.describe('Admin authentication', () => {
       timeout: 10_000,
     })
 
-    // Wait for modal to fully close
+    // Wait for modal and backdrop to fully close
     await expect(page.locator('#loginModal')).toBeHidden({ timeout: 5_000 })
+    await expect(page.locator('.modal-backdrop')).toBeHidden({ timeout: 5_000 })
 
     // Open modal again — should show "Logged In" with logout button
     await page.locator('[data-bs-target="#loginModal"]').click()
