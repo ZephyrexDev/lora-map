@@ -341,6 +341,7 @@ async def predict(
         color: str = payload.color if payload.color else next_tower_color(existing_colors)
 
         session.add(Tower(id=tower_id, name="Unnamed", color=color, params=payload.model_dump()))
+        session.flush()
         session.add(Task(id=task_id, tower_id=tower_id, status="processing"))
 
         config = get_matrix_config(session)

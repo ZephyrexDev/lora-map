@@ -21,6 +21,25 @@
 
 ---
 
+## Who This Is For
+
+Meshcore and LoRa communities with fixed tower infrastructure who want to **plan new sites with real propagation physics** and **share current coverage maps with their community**. Admins run simulations; visitors see the results on an interactive map — no RF expertise required.
+
+## Why LoRa Map?
+
+The [upstream planner](https://github.com/meshtastic/meshtastic-site-planner) runs single-tower, single-terrain simulations. LoRa Map builds on that foundation with multi-tower network planning, real-world terrain modeling, and a visitor-facing coverage portal.
+
+- **Multi-source terrain** — Go beyond flat bare-earth SRTM. Simulate against Copernicus DSM (buildings + tree canopy), ESA WorldCover LULC clutter, or a weighted aggregate that blends all three for a realistic "expected coverage" estimate.
+- **Batch simulation matrix** — Pre-compute coverage for every combination of client hardware, antenna, and terrain model. Visitors instantly switch scenarios — no simulation wait, no admin involvement.
+- **Deadzone remediation** — Automatically find coverage gaps across your network, rank them by priority, and suggest where to place new towers with estimated coverage gain.
+- **Mesh path analysis** — Pairwise SPLAT! point-to-point between all towers. See line-of-sight status, path loss, and link quality as color-coded polylines — understand your mesh backbone at a glance.
+- **Overlap visualization** — Per-tower color-coded layers with signal-strength transparency. Multi-coverage areas render as cross-hatched patterns so you can distinguish each tower's contribution.
+- **Hardware-aware presets** — Heltec V3/V4 profiles, region-locked frequencies (CA/US/EU/AU/AS), curated antennas with automatic SWR mismatch loss calculated and deducted.
+- **Visitor portal** — Community members pick their client device and antenna from dropdowns and see personalized coverage maps. No login, no configuration, instant results.
+- **One container** — Single Podman image, one port, one volume mount. Deploys behind your existing reverse proxy in minutes.
+
+---
+
 ## Table of Contents
 
 - [Overview](#-overview)
@@ -51,11 +70,15 @@ Terrain elevation data is streamed from [AWS Open Data](https://registry.opendat
 | Category | Details |
 |---|---|
 | **Coverage Prediction** | ITM/Longley-Rice propagation model via SPLAT!, configurable frequency/power/gain/height, per-tower color-coded layers with signal-strength alpha mapping |
-| **Hardware Presets** | Pre-configured profiles for Heltec V3/V4, region-locked frequencies (CA/US/EU/AU/AS), curated antenna list with SWR mismatch loss calculation |
-| **Multi-Tower Support** | Independent per-tower layers, visibility toggling without re-rendering, automatic color assignment from a 24-color palette |
-| **Admin/Visitor Roles** | Admin credentials gate simulation triggers and tower management; visitors see cached results instantly with no edit capability |
-| **Persistent Storage** | Tower configs, simulation results, and GeoTIFF blobs persisted in SQLite on a mounted volume |
-| **Single Container** | One Podman container, HTTP on port 8080, sits behind your existing HTTPS reverse proxy |
+| **Multi-Source Terrain** | Bare-earth SRTM, Copernicus DSM (buildings + canopy), ESA WorldCover LULC clutter, and weighted aggregate blend mode |
+| **Batch Simulation Matrix** | Admin-configurable client hardware × antenna × terrain combinations, pre-computed so visitors get instant layer switching |
+| **Deadzone Remediation** | Gap analysis across all towers, priority-scored deadzone regions, suggested new tower placements with estimated coverage gain |
+| **Mesh Path Analysis** | Pairwise SPLAT! point-to-point between towers, path loss and LOS status, color-coded polyline overlay |
+| **Overlap Visualization** | Cross-hatched canvas layer distinguishes per-tower signal contributions in multi-coverage areas |
+| **Hardware Presets** | Heltec V3/V4 profiles, region-locked frequencies (CA/US/EU/AU/AS), curated antennas with SWR mismatch loss |
+| **Admin/Visitor Roles** | Rate-limited admin auth gates mutations; visitors see cached results instantly with client hardware/antenna/terrain selectors |
+| **Mobile Responsive** | Full responsive layout with touch-friendly controls, sticky simulation button, and adaptive offcanvas sidebar |
+| **Single Container** | One Podman container, HTTP on port 8080, SQLite on a mounted volume, sits behind your existing reverse proxy |
 
 ---
 
@@ -149,9 +172,9 @@ pnpm run test
 
 | Suite | Framework | Tests |
 |---|---|---|
-| Backend | pytest | 196 |
-| Frontend | Vitest | 50 |
-| **Total** | | **246** |
+| Backend | pytest | 341 |
+| Frontend | Vitest | 232 |
+| **Total** | | **573** |
 
 All tests run against real code with zero mocks — SPLAT! binaries are built from source during test setup.
 
@@ -162,11 +185,11 @@ All tests run against real code with zero mocks — SPLAT! binaries are built fr
 This tool runs a physics simulation with the following key assumptions:
 
 1. **Terrain resolution:** SRTM elevation data is accurate to ~90 m (3-arcsecond) or ~30 m (1-arcsecond HD mode).
-2. **No surface clutter by default:** Buildings, trees, and other obstructions beyond terrain are not modeled. The uniform `clutter_height` parameter can approximate ground-level obstructions. Future support for DSM tiles and LULC-burned clutter is planned.
+2. **Surface clutter is optional:** By default, bare-earth SRTM terrain has no buildings or vegetation. Enable DSM (Copernicus GLO-30) or LULC clutter (ESA WorldCover) terrain modes for simulations that include surface obstructions. The weighted aggregate mode blends all three sources.
 3. **Isotropic antennas:** Horizontal radiation patterns are assumed omnidirectional. Directional antenna patterns are not modeled.
 4. **No skywave propagation:** Upper-atmosphere reflections are assumed negligible, which is less accurate below ~50 MHz.
 
-A detailed description of all model parameters and their recommended values is available in [parameters.md](parameters.md).
+A detailed description of all model parameters and their recommended values is available in [docs/parameters.md](docs/parameters.md).
 
 ---
 

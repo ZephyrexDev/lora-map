@@ -971,7 +971,7 @@ class Splat:
             line_stripped = line.strip()
 
             # Parse path loss — prefer ITM/ITWOM over free-space
-            loss_match = re.search(r"(?:ITM|ITWOM)[^\d]*path loss:\s*([\d.]+)\s*dB", line_stripped, re.IGNORECASE)
+            loss_match = re.search(r"(?:ITM|ITWOM).*?path loss:\s*([\d.]+)\s*dB", line_stripped, re.IGNORECASE)
             if loss_match:
                 path_loss_db = float(loss_match.group(1))
 
