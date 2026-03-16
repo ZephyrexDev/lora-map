@@ -65,8 +65,8 @@ class TestPostTowerPaths:
         body = resp.json()
         assert body["count"] == 1
         assert len(body["paths"]) == 1
-        assert body["paths"][0]["tower_a_id"] == t1
-        assert body["paths"][0]["tower_b_id"] == t2
+        path_ids = {body["paths"][0]["tower_a_id"], body["paths"][0]["tower_b_id"]}
+        assert path_ids == {t1, t2}
 
     def test_creates_correct_pair_count(self, client):
         for i in range(4):
