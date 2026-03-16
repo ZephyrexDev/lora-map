@@ -86,7 +86,10 @@ class TestRunMatrixSimulations:
             )
             session.commit()
 
-        with patch("app.main.splat_service.coverage_prediction", side_effect=RuntimeError("boom")):
+        with (
+            patch("app.main.splat_service.coverage_prediction", side_effect=RuntimeError("boom")),
+            patch("app.main._SIMULATION_RETRY_DELAY_SECONDS", 0),
+        ):
             run_matrix_simulations(tid, _make_request())
 
         with db_session() as session:
@@ -126,11 +129,15 @@ class TestRunMatrixSimulations:
         def side_effect(*args, **kwargs):
             nonlocal call_count
             call_count += 1
-            if call_count == 1:
+            # Fail on calls 1 and 2 (both retry attempts for sim1), succeed after
+            if call_count <= 2:
                 raise RuntimeError("first fails")
             return b"SECOND_OK"
 
-        with patch("app.main.splat_service.coverage_prediction", side_effect=side_effect):
+        with (
+            patch("app.main.splat_service.coverage_prediction", side_effect=side_effect),
+            patch("app.main._SIMULATION_RETRY_DELAY_SECONDS", 0),
+        ):
             run_matrix_simulations(tid, _make_request())
 
         with db_session() as session:
