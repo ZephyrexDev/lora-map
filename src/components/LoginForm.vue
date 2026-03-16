@@ -66,8 +66,8 @@ async function handleLogin() {
     const modalEl = document.getElementById("loginModal");
     if (modalEl) {
       const bootstrap = await import("bootstrap/dist/js/bootstrap.bundle.min.js");
-      const modal = bootstrap.Modal.getInstance(modalEl);
-      modal?.hide();
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.hide();
     }
   } else {
     errorMessage.value = "Invalid password. Please try again.";
